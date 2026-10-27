@@ -1,0 +1,60 @@
+> movies ive seen
+
+- the truman show
+- whiplash — sooo stressful
+- parasite
+- knives out
+- get out
+- interstellar — good but i barely understood what was happening
+- black swan — weird as hell
+- little women
+- shutter island
+- prisoners!!!! actually loved this
+- the batman — rob pattinson <3
+- joker
+- hereditary — NEVER AGAIN
+- eternal sunshine of the spotless mind — ouch
+- about time
+- good will hunting
+- dead poets society
+- the breakfast club
+- the substance — disgusting. loved it
+- challengers
+- anyone but you — it was fine lol
+- the menu — kinda loved this
+- bodies bodies bodies
+- the perks of being a wallflower
+- beautiful boy — depressing
+- call me by your name
+- bottoms — SO funny
+- licorice pizza
+- lady bird
+- little miss sunshine
+- the florida project
+- the edge of seventeen
+- the spectacular now
+- booksmart
+- the worst person in the world
+- mid90s
+- shiva baby — stressful for no reason
+- silver linings playbook
+- the talented mr ripley
+- the virgin suicides
+- marriage story
+- punch drunk love
+- sound of metal
+- aftersun — :(
+- the spectacular now (again)
+- saltburn — i don't even know
+- american fiction
+- the french dispatch
+- anatomy of a fall
+- the peanut butter falcon
+- i, tonya
+- paterson — nothing really happens but i liked it
+- the secret life of walter mitty (pretty sure ive seen this twice)
+- c'mon c'mon
+- a real pain
+- the holdovers might actually be one of my favorites
+- my old ass
+- the half of it
