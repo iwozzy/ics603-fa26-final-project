@@ -1,0 +1,195 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Lumière · Movie discovery</title>
+  <style>
+    * { box-sizing: border-box; }
+    body { margin: 0; color: #252525; background: #fafafa;
+           font: 16px/1.5 system-ui, sans-serif; }
+    aside { position: fixed; width: 220px; height: 100vh; padding: 24px;
+            background: white; border-right: 1px solid #ddd; }
+    nav a { display: block; margin: 12px 0; color: inherit; }
+    main { margin-left: 220px; padding: 32px; max-width: 1100px; }
+    section { margin-bottom: 32px; scroll-margin-top: 24px; }
+    h1, h2, h3 { line-height: 1.2; }
+    label { display: block; margin: 12px 0 4px; }
+    input, textarea, select, button { font: inherit; padding: 8px; }
+    input[type=text], textarea { width: 100%; }
+    textarea { min-height: 100px; }
+    fieldset, article { padding: 16px; border: 1px solid #ddd;
+                        border-radius: 6px; margin: 16px 0; background: white; }
+    button { margin-top: 12px; cursor: pointer; }
+    button:disabled { cursor: default; }
+    .hint { color: #595959; }
+    .placeholder { color: #595959; border: 1px dashed #aaa;
+                   padding: 12px; display: inline-block; }
+    @media (max-width: 650px) {
+      aside { position: static; width: auto; height: auto; }
+      main { margin-left: 0; padding: 20px; }
+    }
+  </style>
+</head>
+<body>
+  <aside>
+    <h1>Lumière</h1>
+    <nav aria-label="Main navigation">
+      <a href="#search">Search</a>
+      <a href="#timeline">Timeline</a>
+      <a href="#watch-list">Watch list</a>
+      <a href="#following">Following</a>
+      <a href="#suggest">Suggest a movie</a>
+    </nav>
+    <p class="hint">Project skeleton · Nothing is saved.</p>
+  </aside>
+  <main>
+    <form id="search-form" action="/search" method="post">
+      <section id="search" aria-labelledby="search-heading">
+        <h2 id="search-heading">Discover movies</h2>
+        <p class="hint">Submit any input to see the same sample people and movies.</p>
+        <label for="category">Search for</label>
+        <select id="category" name="category">
+          <option value="cast_crew">Cast &amp; Crew</option>
+          <option value="movies">Movies</option>
+        </select>
+        <label for="query">Actor, director, creative team member, or movie title</label>
+        <input id="query" name="query" type="text"
+               placeholder="e.g. Matthew McConaughey">
+        <fieldset>
+          <legend>Import movies</legend>
+          <label for="note">Paste a movie list note</label>
+          <textarea id="note" name="note"></textarea>
+          <label for="photo">Attach a DVD collection photo</label>
+          <input id="photo" name="photo" type="file" accept="image/*">
+          <p class="hint">Notes and photos are not processed or stored.</p>
+        </fieldset>
+      </section>
+      <section id="timeline" aria-labelledby="timeline-heading">
+        <h2 id="timeline-heading">Timeline</h2>
+        <label for="storyline-query">Search by title or storyline</label>
+        <input id="storyline-query" name="storyline_query" type="text">
+        <label for="watch-status">Watch status</label>
+        <select id="watch-status" name="watch_status">
+          <option value="unseen">Unseen</option>
+          <option value="all" selected>All</option>
+          <option value="seen">Seen</option>
+        </select>
+        <p class="hint">Your chronological movie timeline will appear here.
+          Search and filtering are placeholders.</p>
+      </section>
+      <button id="submit" type="submit">Show sample results</button>
+    </form>
+    <noscript>Enable JavaScript to submit inputs and display sample results.</noscript>
+    <section aria-labelledby="results-heading">
+      <h2 id="results-heading">Results</h2>
+      <p id="message" role="status" aria-live="polite">No submission yet.</p>
+      <div id="results"></div>
+    </section>
+    <section id="watch-list">
+      <h2>Watch list</h2>
+      <p class="hint">Movies you want to watch will appear here.</p>
+    </section>
+    <section id="following">
+      <h2>Following</h2>
+      <p class="hint">Cast and crew you follow will appear here.</p>
+    </section>
+    <section id="suggest">
+      <h2>Suggest a movie</h2>
+      <p class="hint">Three movie suggestions will appear here.</p>
+      <button type="button" disabled>Suggest a movie (coming later)</button>
+    </section>
+  </main>
+  <script>
+    const form = document.getElementById('search-form');
+    const results = document.getElementById('results');
+    const message = document.getElementById('message');
+    const submit = document.getElementById('submit');
+
+    function appendText(parent, tag, text, className = '') {
+      const element = document.createElement(tag);
+      element.textContent = text;
+      element.className = className;
+      parent.append(element);
+    }
+
+    function addButton(parent, text) {
+      const button = document.createElement('button');
+      button.type = 'button';
+      button.textContent = text;
+      button.disabled = true;
+      parent.append(button);
+    }
+
+    function showResults(data) {
+      results.replaceChildren();
+      message.textContent = data.message;
+      appendText(results, 'h3', 'Cast & Crew');
+      for (const person of data.people) {
+        const card = document.createElement('article');
+        appendText(card, 'span', 'Portrait placeholder', 'placeholder');
+        appendText(card, 'h3', person.name);
+        appendText(card, 'p', `${person.role} · ${person.known_for.join(', ')}`);
+        addButton(card, 'Follow (coming later)');
+        results.append(card);
+      }
+      appendText(results, 'h3', 'Movies');
+      for (const movie of data.movies) {
+        const card = document.createElement('article');
+        appendText(card, 'span', 'Poster placeholder', 'placeholder');
+        appendText(card, 'h3', `${movie.title} (${movie.release_year})`);
+        appendText(card, 'p', movie.tagline);
+        appendText(card, 'p', movie.storyline);
+        appendText(card, 'p',
+          `${movie.release_date} · ${movie.genres.join(', ')} · ` +
+          `${movie.runtime_minutes} minutes · ${movie.watch_status}`);
+        for (const group of ['cast', 'crew']) {
+          appendText(card, 'p', `${group}: ` + movie[group]
+            .map(person => `${person.name} (${person.role})`).join(', '));
+        }
+        addButton(card, 'Add to watch list (coming later)');
+        addButton(card, 'Mark seen (coming later)');
+        results.append(card);
+      }
+    }
+
+    function readPhoto(file) {
+      if (!file) return Promise.resolve(null);
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(reader.result);
+        reader.onerror = () => reject(new Error('Could not read the selected photo.'));
+        reader.readAsDataURL(file);
+      });
+    }
+
+    form.addEventListener('submit', async event => {
+      event.preventDefault();
+      submit.disabled = true;
+      message.textContent = 'Loading sample results…';
+      try {
+        const fields = new FormData(form);
+        const photo = document.getElementById('photo').files[0];
+        const response = await fetch(form.action, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({
+            category: fields.get('category'),
+            query: fields.get('query'),
+            note: fields.get('note'),
+            photo_data_url: await readPhoto(photo),
+            storyline_query: fields.get('storyline_query'),
+            watch_status: fields.get('watch_status'),
+          }),
+        });
+        if (!response.ok) throw new Error('Could not load sample results. Try again.');
+        showResults(await response.json());
+      } catch (error) {
+        message.textContent = error.message;
+      } finally {
+        submit.disabled = false;
+      }
+    });
+  </script>
+</body>
+</html>

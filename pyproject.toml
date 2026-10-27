@@ -27,6 +27,6 @@ extend-select = ["C90"]
 max-complexity = 10
 
 [tool.mypy]
-files = ["app", "tests"]
+files = ["."]
 plugins = ["pydantic.mypy"]
 check_untyped_defs = true

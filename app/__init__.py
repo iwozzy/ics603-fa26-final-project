@@ -1,0 +1,1 @@
+"""Movie discovery application skeleton."""
