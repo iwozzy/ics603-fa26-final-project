@@ -10,7 +10,7 @@ The full proposal is in docs/proposal.md.
 - app/agent.py: the Pydantic AI agent and output model.
 - app/rules.py: rules in plain Python. No FastAPI, no LLM client.
 
-# Commands
+## Commands
 
 ```bash
 uv run fastapi dev app/main.py # run the app
@@ -19,7 +19,7 @@ uv run mypy # check types
 uv run pytest # run the tests
 ```
 
-# Rules
+## Rules
 
 - Tests never call a real model. Use TestModel with override_allow_model_requests(False).
 - Read LLM_API_TOKEN and LLM_API_GATEWAY from the environment. Never write a key outside .env.
@@ -27,7 +27,7 @@ uv run pytest # run the tests
 - Never weaken a check: no raised max-complexity, no # noga or # type: ignore, no skipped tests.
 
 
-# Engineering Principles
+## Engineering Principles
 
 - Optimize for correctness, readability, simplicity, and long-term maintainability.
 - Code is read and modified more often than it is written. Favor solutions that another engineer can understand, debug, and extend without unnecessary cognitive overhead.
@@ -44,4 +44,11 @@ uv run pytest # run the tests
 - Document non-obvious invariants, business rules, constraints, and tradeoffs.
 - Keep comments and documentation synchronized with behavior.
 - Document public interfaces where their contracts are not immediately clear.
+
+
+## Changes
+
+- Never commit to main. Make each change on its own branch and open a pull request with gh pr create. The description has a ## Summary (what changed why, citing docs/proposal.md) and a ## Test plan checklist (checked items were run: unchecked items are left for the reviewer).
+- After pushing, run gh pr checks --watch and report the result.
+- Never merge a pull request. The person after reviewing it.
 
