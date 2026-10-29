@@ -58,11 +58,9 @@
                placeholder="e.g. Matthew McConaughey">
         <fieldset>
           <legend>Import movies</legend>
-          <label for="note">Paste a movie list note</label>
-          <textarea id="note" name="note"></textarea>
           <label for="photo">Attach a DVD collection photo</label>
           <input id="photo" name="photo" type="file" accept="image/*">
-          <p class="hint">Notes and photos are not processed or stored.</p>
+          <p class="hint">Photos are not processed or stored.</p>
         </fieldset>
       </section>
       <section id="timeline" aria-labelledby="timeline-heading">
@@ -80,7 +78,21 @@
       </section>
       <button id="submit" type="submit">Show sample results</button>
     </form>
-    <noscript>Enable JavaScript to submit inputs and display sample results.</noscript>
+    <section aria-labelledby="note-heading">
+      <h2 id="note-heading">Extract movie titles</h2>
+      <form id="note-form" action="/extract-note" method="post">
+        <label for="note">Paste a movie list note</label>
+        <textarea id="note" name="note" maxlength="20000"
+                  aria-describedby="note-hint"></textarea>
+        <p id="note-hint" class="hint">Up to 20,000 characters.</p>
+        <button id="extract-note" type="submit">Extract movie titles</button>
+      </form>
+      <p id="note-status" role="status" aria-live="polite">No note extracted yet.</p>
+      <p class="hint">Titles have not been matched to movie records. Edit titles or
+        uncheck Keep to leave them out. Nothing is saved; reloading clears this list.</p>
+      <div id="note-results"></div>
+    </section>
+    <noscript>Enable JavaScript to extract movie titles and display sample results.</noscript>
     <section aria-labelledby="results-heading">
       <h2 id="results-heading">Results</h2>
       <p id="message" role="status" aria-live="polite">No submission yet.</p>
@@ -105,6 +117,12 @@
     const results = document.getElementById('results');
     const message = document.getElementById('message');
     const submit = document.getElementById('submit');
+    const noteForm = document.getElementById('note-form');
+    const note = document.getElementById('note');
+    const noteSubmit = document.getElementById('extract-note');
+    const noteStatus = document.getElementById('note-status');
+    const noteResults = document.getElementById('note-results');
+    let notePending = false;
 
     function appendText(parent, tag, text, className = '') {
       const element = document.createElement(tag);
@@ -163,6 +181,72 @@
       });
     }
 
+    function showExtractedTitles(titles) {
+      const rows = document.createDocumentFragment();
+      titles.forEach((title, index) => {
+        const row = document.createElement('fieldset');
+        appendText(row, 'legend', `Extracted title ${index + 1}`);
+        const label = document.createElement('label');
+        label.textContent = `Movie title ${index + 1}`;
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.id = `extracted-title-${index}`;
+        input.value = title;
+        label.htmlFor = input.id;
+        row.append(label, input);
+        const keepLabel = document.createElement('label');
+        const keep = document.createElement('input');
+        keep.type = 'checkbox';
+        keep.checked = true;
+        keepLabel.append(keep, ` Keep title ${index + 1}`);
+        row.append(keepLabel);
+        rows.append(row);
+      });
+      noteResults.replaceChildren(rows);
+      noteStatus.textContent = titles.length
+        ? `${titles.length} movie ${titles.length === 1 ? 'title' : 'titles'} extracted.`
+        : 'No movie titles found (0 extracted titles).';
+    }
+
+    noteForm.addEventListener('submit', async event => {
+      event.preventDefault();
+      if (notePending) return;
+      if (!note.value.trim()) {
+        noteStatus.textContent = 'Paste a movie note before extracting titles.';
+        return;
+      }
+      notePending = true;
+      noteSubmit.disabled = true;
+      noteStatus.textContent = 'Extracting movie titles…';
+      try {
+        const response = await fetch(noteForm.action, {
+          method: 'POST',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({note: note.value}),
+        });
+        if (!response.ok) {
+          const errors = {
+            422: 'Enter a movie note of at most 20,000 characters.',
+            503: 'Note extraction is not configured.',
+            504: 'Movie title extraction timed out. Try again.',
+          };
+          throw new Error(errors[response.status] || 'Could not extract movie titles. Try again.');
+        }
+        const data = await response.json();
+        if (!data || !Array.isArray(data.titles)
+            || !data.titles.every(title => typeof title === 'string')) {
+          throw new Error('Could not extract movie titles. Try again.');
+        }
+        showExtractedTitles(data.titles);
+      } catch (error) {
+        noteStatus.textContent = error instanceof TypeError || error instanceof SyntaxError
+          ? 'Could not extract movie titles. Try again.' : error.message;
+      } finally {
+        notePending = false;
+        noteSubmit.disabled = false;
+      }
+    });
+
     form.addEventListener('submit', async event => {
       event.preventDefault();
       submit.disabled = true;
@@ -176,7 +260,6 @@
           body: JSON.stringify({
             category: fields.get('category'),
             query: fields.get('query'),
-            note: fields.get('note'),
             photo_data_url: await readPhoto(photo),
             storyline_query: fields.get('storyline_query'),
             watch_status: fields.get('watch_status'),
