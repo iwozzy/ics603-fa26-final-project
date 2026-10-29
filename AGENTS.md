@@ -54,6 +54,7 @@ uv run pytest # run the tests
 ## Changes
 
 - Never commit to main. Make each change on its own branch and open a pull request with gh pr create. The description has a ## Summary (what changed why, citing docs/proposal.md) and a ## Test plan checklist (checked items were run: unchecked items are left for the reviewer).
+- When a pull request is opened or ready to open, use `.agents/skills/pr-diagram/SKILL.md` to add one verified Mermaid diagram to its description, preserving the Summary and Test plan.
 - After pushing, run gh pr checks --watch and report the result.
 - Never merge a pull request. The person after reviewing it.
 
