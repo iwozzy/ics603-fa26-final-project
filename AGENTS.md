@@ -6,9 +6,12 @@ The full proposal is in docs/proposal.md.
 
 ## Layout
 
+- This is the starting layout. When a module takes on a second responsibility, split it by responsibility (for example, `app/rules.py` into `app/rules/quota.py` and `app/rules/scope.py`) and update this section in the same change.
+
 - app/main.py: routes and the page. No business rules.
 - app/agent.py: the Pydantic AI agent and output model.
 - app/rules.py: rules in plain Python. No FastAPI, no LLM client.
+
 
 ## Commands
 
@@ -52,3 +55,8 @@ uv run pytest # run the tests
 - After pushing, run gh pr checks --watch and report the result.
 - Never merge a pull request. The person after reviewing it.
 
+
+## Spec
+
+- `docs/proposal.md` is the spec. When a decision is made in a conversation (a feature added or left out, a limit or value chosen, an open question answered), edit the section the decision belongs to so that it states the decision, in the same change, and name that section in the pull request Summary. Change only what the decision affects. Do not add a dated log, approval history, or status notes; git and `docs/superpowers/` keep the history.
+- A design under `docs/superpowers/specs/` covers one change; `docs/proposal.md` covers the whole project. If the two disagree, ask before building.
