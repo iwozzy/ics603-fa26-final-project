@@ -99,6 +99,8 @@ The model will be used to extract movie names from user’s pasted movie note an
 
 The first model-connected increment is note extraction: a user pastes a movie note and receives a deduplicated list of extracted titles to review and edit. This increment returns titles only and does not use retrieval, the TMDB API, or a database. Photo extraction, movie metadata and matching, saved imports, timeline integration, and suggestions remain later increments.
 
+Note extraction initially uses the gateway's `gpt-4.1-nano` model. Each note must contain non-whitespace text and be at most 20,000 characters before trimming. Each extraction allows one model request with a 30-second deadline and no automatic output-validation or provider retries; the user can retry explicitly. These per-request bounds do not implement a global gateway quota.
+
 The model will also be used for the suggest a movie feature, where it will receive a list of cast & crew they follow, as well as the movies they’ve already seen, and be asked to generate 3 suggested movies to watch.
 
 ## Data use

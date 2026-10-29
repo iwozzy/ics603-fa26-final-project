@@ -1,6 +1,6 @@
 # Note extraction design
 
-Draft for approval. This is a small increment connecting the existing page to the model.
+This is a small increment connecting the existing page to the model.
 
 ## Intent and scope
 
