@@ -97,6 +97,8 @@ The app will depend on the TMDB API access, which requires registering for a key
 
 The model will be used to extract movie names from user’s pasted movie note and uploaded photo of their DVD collection.
 
+The first model-connected increment is note extraction: a user pastes a movie note and receives a deduplicated list of extracted titles to review and edit. This increment returns titles only and does not use retrieval, the TMDB API, or a database. Photo extraction, movie metadata and matching, saved imports, timeline integration, and suggestions remain later increments.
+
 The model will also be used for the suggest a movie feature, where it will receive a list of cast & crew they follow, as well as the movies they’ve already seen, and be asked to generate 3 suggested movies to watch.
 
 ## Data use
@@ -117,11 +119,15 @@ A timeline might contain many movies. In order to help with more focused movie d
 
 ## Human review
 
+For the initial note-extraction increment, the user can edit extracted titles and deselect unwanted entries. These changes remain on the current page and are not saved or added to a watch list or timeline.
+
 When the user searches for cast & crew to follow, their search may return multiple results. The user will need to confirm their choice from the list of returned results. The results list will contain additional information such as the portrait, role, and a few select movies, to help the user identify the correct result.
 
 When the user uploads their DVD collection photo, the application will present its best guess of the movies recognized based on what the LLM returned, and what was matched via the TMDB API. The list of movies will contain additional information such as the movie poster thumbnail, the release year, and the tagline to help users identify the correct results.
 
 ## One failure case
+
+If note extraction fails, the user should see a helpful message and be able to retry. Their pasted note and any previous title edits and selections should remain available on the page.
 
 If the LLM image extraction fails, the user should see a helpful message, and have the ability to retry. Their uploaded image should remain available. Their previous selections should be unaffected.
 
