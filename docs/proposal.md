@@ -121,7 +121,7 @@ A timeline might contain many movies. In order to help with more focused movie d
 
 ## Human review
 
-For the initial note-extraction increment, the user can edit extracted titles and deselect unwanted entries. These changes remain on the current page and are not saved or added to a watch list or timeline.
+For the initial note-extraction increment, the page shows the extracted-title count, editable title fields, and initially selected keep checkboxes. Titles are not yet matched to movie records. The user can edit titles and deselect unwanted entries. These changes remain on the current page and are not saved or added to a watch list or timeline; reloading clears the list. A successful extraction replaces the previous review list, including clearing it when no titles are found. Sample search is separate and leaves the review list intact.
 
 When the user searches for cast & crew to follow, their search may return multiple results. The user will need to confirm their choice from the list of returned results. The results list will contain additional information such as the portrait, role, and a few select movies, to help the user identify the correct result.
 
@@ -129,7 +129,7 @@ When the user uploads their DVD collection photo, the application will present i
 
 ## One failure case
 
-If note extraction fails, the user should see a helpful message and be able to retry. Their pasted note and any previous title edits and selections should remain available on the page.
+If note extraction fails, the user should see a helpful message and be able to retry. Their pasted note and any previous title edits and selections should remain available on the page. While an extraction is pending, the page announces loading and prevents duplicate submissions.
 
 If the LLM image extraction fails, the user should see a helpful message, and have the ability to retry. Their uploaded image should remain available. Their previous selections should be unaffected.
 
