@@ -10,7 +10,9 @@ The full proposal is in docs/proposal.md.
 
 - app/main.py: routes and the page. No business rules.
 - app/agent.py: the Pydantic AI agent and output model.
-- app/rules.py: rules in plain Python. No FastAPI, no LLM client.
+- app/rules/confirmation.py: person confirmation rules in plain Python.
+- app/rules/extraction.py: note validation and extracted-title normalization in plain Python.
+- app/rules/__init__.py: public rule re-exports. No FastAPI or LLM client in the rules package.
 
 
 ## Commands

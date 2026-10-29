@@ -1,4 +1,4 @@
-"""Plain Python business rules for movie discovery."""
+"""Plain Python rules for confirming a person to follow."""
 
 
 def validate_person_confirmation(
