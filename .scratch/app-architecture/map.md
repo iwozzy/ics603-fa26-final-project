@@ -29,6 +29,8 @@ Establish a coherent architecture direction for the whole app in [the proposal](
 
 <!-- One named link and a short gist per resolved decision. Detail belongs in the ticket. -->
 
+The accepted direction is consolidated in [ADR-0001: Shared web and native movie-discovery architecture](../../docs/adr/0001-app-architecture.md), including rationale, trade-offs, explicit deferrals, and implementation validation boundaries. The resolved tickets below retain the detailed decision history.
+
 - [Research approaches to sharing web, iOS, and Android code](issues/01-research-shared-mobile-approaches.md): viable sharing approaches depend on the meaning of native; the client platform remains a human decision.
 - [Research HTTP and WebSocket transport trade-offs](issues/02-research-client-transports.md): connection reuse undermines a general socket-overhead advantage; the findings inform the later human transport decision.
 - [Research feasibility of the proposed backend integrations](issues/03-research-backend-integrations.md): plausible integration paths exist; later provider and gateway tickets supply the permission basis and private-service documentation missing from the original research.
