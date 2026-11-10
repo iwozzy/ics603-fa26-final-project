@@ -2,7 +2,7 @@
 
 Date: 2026-11-09
 
-Status: Draft for review
+Status: Approved by the project owner on 2026-11-09
 
 Scope: Starting architecture for the whole application; individual features will be designed separately.
 
@@ -14,7 +14,7 @@ This document establishes the boundaries, technology direction, data ownership, 
 
 The [proposal](../../proposal/proposal.md), its five [wireframes](../../proposal/wireframes/), and two [workflows](../../proposal/workflows/) supply the product context. This design supersedes the proposal's development ordering and narrow note-extraction increment: **the first increment is searching for people and following them**. Old note limits and model choices are not architecture commitments; the relevant feature sessions will revisit them.
 
-Decisions labeled **agreed** come from the architecture discussion. Decisions labeled **proposed** are architectural calls made while drafting and require review with this document. Approval establishes the architecture baseline, not permission to implement every feature.
+Decisions labeled **agreed** come from the architecture discussion. Decisions labeled **proposed** identify architectural calls made while drafting; these were accepted with the document's approval on 2026-11-09. Both form the approved architecture baseline. Items explicitly deferred or described as candidates remain open for later feature designs. Individual feature planning and implementation remain separate work.
 
 ## Goals, constraints, and exclusions
 
