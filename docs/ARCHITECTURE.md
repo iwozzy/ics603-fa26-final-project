@@ -54,7 +54,7 @@ Maintain application UUIDs for entities. Store external identities separately, a
 | **Watchlist** | Unique user/movie relationship with independent `seen` and `in_watchlist` choices. |
 
 - Treat catalog metadata as shared, refreshable data. Follows and Watchlist entries are durable user-owned data.
-- Persist lightweight catalog records for search results exposed through application IDs. Fetching a search result must not automatically trigger a full metadata crawl.
+- Fetching a search result must not automatically trigger a full metadata crawl.
 - Support partial catalog records: movie summaries can be usable before details or additional credits arrive. Track completeness separately from individual missing field values.
 - Derive the timeline from followed people’s credits and explicitly tracked movies. Deduplicate movies and retain the credits explaining their inclusion.
 - Keep source identity and provenance separate from canonical catalog fields. Define reconciliation policies when another source is introduced.
