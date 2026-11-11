@@ -20,16 +20,16 @@ Each feature milestone includes its UI, API, application operation, adapters, an
 | **M0 — Align the implementation brief** | Write the 001-people-search specification; establish development instructions and repository conventions. | Identify people search as the first increment, record its interaction and error behavior. No application implementation is required for this milestone. |
 | **M1 — Search for people** | An Expo web screen submits a name through FastAPI to TMDB. Show names, portraits or fallbacks, department hints, and available known-for hints. | A user can submit a query or example search, inspect results, and perform additional searches. Fixture-backed tests cover no matches, missing portraits, mixed movie/TV hints, provider failure, and an older response arriving after a newer query. Search creates no follows or enrichment jobs. |
 | **M2 — Save follows from search** | Add follow controls and persisted followed state. Introduce the seeded identity adapter and user-scoped operations. | Following a person survives reload and backend restart. Repeating or concurrently submitting the operation creates one relationship. A failed save preserves the previous confirmed state and permits retry. Tests with two injected identities demonstrate independent follows over shared person records. |
-| **M3 — Show followed people’s movies** | Add the durable worker, person-filmography processing, and a compact timeline. Show processing, empty, and failed states with a retry action. Include existing follows created during M2. | Follow two people with overlapping movie credits: their movies appear in the chosen chronological order, each movie appears once, and its inclusion retains all relevant followed-person roles. Restart the API and worker during processing: committed follows remain and unfinished work recovers without duplicate movies or credits. Provider failure preserves cached movies and remains distinguishable from a successfully empty filmography. |
-| **M4 — Manage followed people** | Add a Following screen with persisted state, processing status, and unfollow controls. Recompute timeline membership from current follows. | Unfollowing removes movies supported only by that relationship; movies supported by another follow remain. Shared catalog records and other users’ follows remain intact. Unfollowing during an active job does not recreate the relationship or restore its movies to that user’s timeline. Changes survive restart. |
+| **M3 — Show followed people’s movies** | Add the durable worker, person-filmography processing, and a compact timeline. Include existing follows created during M2. | Follow two people with overlapping movie credits: their movies appear in the chosen chronological order, each movie appears once, and its inclusion retains all relevant followed-person roles. Restart the API and worker during processing: committed follows remain and unfinished work recovers without duplicate movies or credits. Provider failure preserves cached movies and remains distinguishable from a successfully empty filmography. |
+| **M4 — Manage followed people** | Add a Following screen with persisted state, processing status, and unfollow controls. Recompute timeline membership from current follows. | Unfollowing removes the Watchlist record and not the Movie records. Shared catalog records and other users’ follows remain intact. Unfollowing during an active job does not recreate the relationship or restore its movies to that user’s timeline. Changes survive restart. |
 
 **M1 is the first useful feature. M3 is the first complete demonstration of the core architecture.**
 
-Before implementing M3, complete a focused queue investigation. Its required output is a documented library choice and proof of durable handoff, duplicate-work suppression, crash recovery, retry behavior, and Neon-compatible connection use. Do not develop a general queue framework.
+Before implementing M3, complete plan the queue implementation and get sign off.
 
 Defaults for the compact timeline:
 
-- Newest release date first, matching the wireframe; undated movies remain visible in an explicit undated group.
+- Newest release date first, matching the wireframe; undated movies are not shown.
 - Stable ordering for equal dates.
 - Title, release date, available poster/overview, and followed-person credit explanations.
 - Simple pagination and explicit reload initially.
@@ -46,7 +46,7 @@ Retain every returned person regardless of whether their known-for credits are m
 | **M3: timeline** | Movie/Credit persistence, resource completeness, durable queue and worker entry point, atomic scheduling, shared provider throttling, retry/recovery behavior, and API-to-job trace correlation. |
 | **Later increments** | Independent movie-detail and refresh lanes when those jobs exist; scheduled refreshes; Watchlist/seen state; AI extraction and gateway budgets; photo storage; embeddings; suggestions; authentication; mobile builds; hosting selection; richer UI and push updates. |
 
-Create ports only as these capabilities appear. Keep each request and concurrent job’s database session independent, with provider calls outside database transactions.
+Create ports only as these capabilities appear. Give each API request and background job its own database session. Use short transactions for database work, and end them before calling TMDB or other external services.
 
 Public contracts should expose:
 
