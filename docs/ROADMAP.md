@@ -14,7 +14,6 @@ The detailed roadmap ends at the core discovery loop. AI features, movie trackin
 
 | Finding or risk | Recommendation |
 |---|---|
-| **Conflicting documents.** The proposal still specifies note extraction first and a fixed model; the architecture explicitly supersedes those decisions. | Align the proposal with the architecture. Preserve extraction examples and failure requirements as future feature inputs. |
 | **“Local first” could produce incomplete discovery.** A partially populated catalog cannot answer arbitrary name searches comprehensively. | Use TMDB for people discovery and reuse/upsert local identities for returned results. Reserve local-first behavior for known entities and resources. Search must not initiate filmography crawling. |
 | **Identity and completeness need precise meanings.** Provider IDs alone do not identify an application entity, and a person summary does not imply their credits are loaded. | Scope source mappings by provider, entity kind, and external ID. Track completeness and successful freshness separately for resources such as person summaries and filmographies. Do not let sparse search responses erase richer metadata. |
 | **Saving a follow and scheduling work can diverge after a crash.** Retrying workers can also duplicate catalog records or credits. | Before background processing, establish an atomic durable handoff between follow creation and work scheduling. Require repeatable processing, database uniqueness, recoverable claims, and bounded retries. Preserve multiple roles for the same person/movie relationship. |
