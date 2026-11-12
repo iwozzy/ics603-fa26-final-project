@@ -19,7 +19,8 @@
     "test:e2e": "playwright test",
     "api:generate": "node scripts/generate-api.mjs",
     "api:check": "node scripts/generate-api.mjs --check",
-    "check": "npm run expo:check && npm run lint:check && npm run format:check && npm run typecheck && npm test && npm run api:check && npm run build"
+    "boundaries:check": "node scripts/check-boundaries.mjs",
+    "check": "npm run expo:check && npm run lint:check && npm run boundaries:check && npm run format:check && npm run typecheck && npm test && npm run api:check && npm run build"
   },
   "dependencies": {
     "@expo/metro-runtime": "58.0.17",

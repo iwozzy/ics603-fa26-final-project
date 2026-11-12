@@ -1,4 +1,4 @@
-.PHONY: setup api web check check-backend check-frontend test-e2e api-types
+.PHONY: setup api fixture-api web check check-backend check-frontend test-e2e api-types smoke-logfire
 
 setup:
 	uv --directory backend sync --locked
@@ -6,6 +6,12 @@ setup:
 
 api:
 	uv --directory backend run --locked uvicorn lumiere.bootstrap:create_app --factory --reload --reload-dir src --host 127.0.0.1 --port 8000 --no-access-log
+
+fixture-api:
+	LUMIERE_TELEMETRY_ENABLED=false uv --directory backend run --locked uvicorn --app-dir tests fixture_app:create_fixture_app --factory --host 127.0.0.1 --port 8000 --no-access-log
+
+smoke-logfire:
+	uv --directory backend run --locked python scripts/smoke_logfire.py
 
 web:
 	npm --prefix frontend start

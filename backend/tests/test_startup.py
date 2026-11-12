@@ -14,7 +14,7 @@ def anyio_backend() -> str:
 
 @pytest.fixture
 def settings(monkeypatch: pytest.MonkeyPatch) -> Settings:
-    monkeypatch.setenv("APP_TELEMETRY_ENABLED", "false")
+    monkeypatch.setenv("LUMIERE_TELEMETRY_ENABLED", "false")
     return Settings()
 
 
@@ -29,7 +29,9 @@ async def test_health_and_openapi(settings: Settings) -> None:
         assert response.status_code == 200
         assert response.json() == {"status": "ok"}
         assert "/health" in (await client.get("/openapi.json")).json()["paths"]
-        assert (await client.get("/api/people/search?query=example")).status_code == 404
+        assert (
+            "/api/people/search" in (await client.get("/openapi.json")).json()["paths"]
+        )
 
 
 @pytest.mark.parametrize(
@@ -88,9 +90,9 @@ async def test_failure_is_generic_and_request_data_is_not_logged(
 
 
 def test_process_environment_config(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("APP_CORS_ORIGINS", '["http://localhost:9000"]')
-    monkeypatch.setenv("APP_LOG_LEVEL", "WARNING")
-    monkeypatch.setenv("APP_TELEMETRY_ENABLED", "false")
+    monkeypatch.setenv("LUMIERE_CORS_ORIGINS", '["http://localhost:9000"]')
+    monkeypatch.setenv("LUMIERE_LOG_LEVEL", "WARNING")
+    monkeypatch.setenv("LUMIERE_TELEMETRY_ENABLED", "false")
     settings = Settings()
     assert settings.cors_origins == ["http://localhost:9000"]
     assert settings.log_level == "WARNING"

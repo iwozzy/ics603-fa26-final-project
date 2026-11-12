@@ -5,6 +5,7 @@ description = "A web app that helps people discover movies from their favorite a
 requires-python = ">=3.13"
 dependencies = [
     "fastapi>=0.162.2",
+    "httpx>=0.28.1",
     "logfire>=5.5.0",
     "pydantic>=2.14.3",
     "pydantic-settings>=2.16.2",
@@ -13,7 +14,6 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "httpx>=0.28.1",
     "import-linter>=2.16",
     "pyrefly>=1.4.1",
     "pytest>=9.2.0",
@@ -43,6 +43,7 @@ addopts = "--strict-config --strict-markers"
 
 [tool.pyrefly]
 project-includes = ["src", "tests", "scripts"]
+python-interpreter-path = ".venv/bin/python"
 
 [tool.importlinter]
 root_package = "lumiere"

@@ -15,7 +15,7 @@ const schema = execFileSync(
   {
     cwd: backend,
     encoding: 'utf8',
-    env: { ...process.env, APP_TELEMETRY_ENABLED: 'false' },
+    env: { ...process.env, LUMIERE_TELEMETRY_ENABLED: 'false' },
   },
 );
 const generated = astToString(await openapiTS(JSON.parse(schema)));

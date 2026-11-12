@@ -37,7 +37,8 @@ Selecting an example fills the input with its name and immediately submits it. E
 ### Empty, invalid, and failed searches
 
 - A successful search with no results displays the initial state.
-- Blank or overlong submissions are silently rejected without changing the current search state.
+- Blank submissions (empty after trimming) restore the initial examples and clear the input without sending a request.
+- Overlong submissions are silently rejected without changing the current search state.
 - Request failures stop loading and return to initial state. Errors are logged; there is no error message or Retry control.
 - Users can submit another ordinary search after any completed request, including the same name.
 
@@ -48,6 +49,7 @@ Selecting an example fills the input with its name and immediately submits it. E
 - Trim surrounding whitespace and accept names containing Unicode, spaces, and punctuation.
 - Accept 1–100 Unicode code points after trimming. Do not change case, remove accents, or collapse internal whitespace.
 - Submit only through Enter, the search button, or an example selection.
+- Use the placeholder `Search for actors, directors, or creative team to follow`, with a muted color that distinguishes it from entered text.
 - Fetch only the first provider page and return at most seven valid people.
 - Preserve provider ordering; do not add ranking or merge people with identical names.
 - Retain people regardless of department or whether their known-for hints contain movies, TV, both, or neither.
@@ -68,7 +70,7 @@ TMDB searches names and aliases. The adapter will use its people-search endpoint
 | Empty | Initial state. Search form remains available. |
 | Failed | Loading stops; UI returns to initial state. No failure message, notification, or retry control. |
 
-Invalid submissions preserve whichever state is already displayed. Missing or failed portraits use a generic person silhouette and do not change the search state.
+Overlong submissions preserve whichever state is already displayed. Blank submissions reset to the initial examples with an empty input and no loading indicator. Missing or failed portraits use a generic person silhouette and do not change the search state.
 
 ### People portraits
 
@@ -84,6 +86,7 @@ The app should display the portrait with a circle mask.
 - Ignore repeated submission of the same normalized query while that query is already pending.
 - Editing the input alone does not invalidate a submitted request.
 - Ignore completions after screen disposal.
+- A blank submission resets the state and invalidates prior completions without making a provider request.
 
 This requires response-order protection rather than a cancellation framework. Each HTTP request still has its own deadline.
 
@@ -95,6 +98,7 @@ This requires response-order protection rather than a cancellation framework. Ea
 - Use a maximum content width of approximately 48rem, with fluid width and page padding on narrow browsers.
 - Preserve the wireframes’ content hierarchy without reproducing sketch typography or adding the broader application sidebar.
 - Keep the form in a consistent position as results change.
+- Represent Search as a circular magnifying-glass button at the right of the input; retain its accessible name of `Search`.
 - Support keyboard submission, visible focus, accessible input/button names, and loading/result announcements.
 - Mark future controls as disabled and prevent pointer or keyboard activation.
 - Treat portraits as decorative because the adjacent name identifies the person.
@@ -213,7 +217,7 @@ Logfire records backend request and provider spans, durations, outcomes, skipped
 | Backend application | Query trimming and Unicode limits; invalid input makes no provider call; ordered seven-result cap; fake metadata failures. |
 | TMDB adapter | Repository fixture; first-page request; omitted language/content parameters; movie/TV hint normalization; absent portraits; missing hints; malformed people; all-malformed response; invalid envelope; timeout, rate limit, and upstream failures. |
 | HTTP contract | Success/error schemas and statuses; direct invalid requests; no identity fields; response cap; Cache-Control: private, max-age=60 for successful search results, no-store header for errors. |
-| Frontend application | Explicit submission; example submission; silent validation; duplicate pending submission; repeat completed submission; state transitions; disposal; late success and late failure suppression. |
+| Frontend application | Explicit submission; example submission; blank-submission reset; silent overlong validation; duplicate pending submission; repeat completed submission; state transitions; disposal; late success and late failure suppression. |
 | UI components | Required hints; optional-field omission; portrait fallback and image failure; disabled controls; keyboard interaction; loading and empty states; blank failure state. |
 | Browser integration | Real frontend and FastAPI with a fixture-backed metadata adapter; search, examples, repeated queries, empty results, provider failure, and delayed responses. Stub external images. |
 | Architecture/contracts | Forbidden imports fail checks; generated types match OpenAPI; lint, formatting, type checks, tests, and web build pass. |
@@ -224,7 +228,7 @@ Use the existing TMDB JSON as the baseline fixture. Add small focused fixtures f
 
 1. Initial load displays the search form, three examples, and disabled Movies control without making a provider request.
 2. Enter, the search button, and example selection each submit a valid search; typing alone does not.
-3. Blank and overlong input sends no request, shows no validation message, and preserves current state.
+3. Blank input restores the initial examples, clears the input, and stops loading; overlong input preserves current state. Neither sends a request or shows a validation message. Older completions cannot undo the blank reset.
 4. Results contain at most seven valid people in provider order, with no pagination or limit message.
 5. Each result displays its name, portrait or fallback, available department, up to three title hints, and a disabled Follow button on hover.
 6. People with TV-only, mixed, or absent known-for hints remain eligible.

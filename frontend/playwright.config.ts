@@ -10,10 +10,10 @@ export default defineConfig({
   webServer: [
     {
       command:
-        'uv run --locked uvicorn lumiere.bootstrap:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log',
+        'uv run --locked uvicorn --app-dir tests fixture_app:create_fixture_app --factory --host 127.0.0.1 --port 8000 --no-access-log',
       cwd: '../backend',
       url: 'http://127.0.0.1:8000/health',
-      env: { APP_TELEMETRY_ENABLED: 'false' },
+      env: { LUMIERE_TELEMETRY_ENABLED: 'false' },
       timeout: 30_000,
     },
     {

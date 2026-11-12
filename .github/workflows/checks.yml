@@ -8,11 +8,11 @@ permissions:
   contents: read
 
 jobs:
-  scaffold:
+  search-people:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     env:
-      APP_TELEMETRY_ENABLED: 'false'
+      LUMIERE_TELEMETRY_ENABLED: 'false'
       EXPO_NO_DOTENV: '1'
       CI: '1'
     steps:
