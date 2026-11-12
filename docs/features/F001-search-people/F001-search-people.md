@@ -17,7 +17,7 @@ This slice establishes the minimum frontend/backend foundation. Persistence, fol
 
 1. Open the application’s single search screen.
 2. Enter a name and press Enter or activate the search button.
-3. The screen clears previous results and displays loading.
+3. The search box displays a loading spinner.
 4. The backend requests the first TMDB people-search page.
 5. The screen displays up to seven valid people in provider order.
 6. Edit and submit another name to replace the results.
@@ -38,7 +38,7 @@ Selecting an example fills the input with its name and immediately submits it. E
 
 - A successful search with no results displays the initial state.
 - Blank or overlong submissions are silently rejected without changing the current search state.
-- Request failures stop loading and leave the results area blank. Errors are logged; there is no error message or Retry control.
+- Request failures stop loading and return to initial state. Errors are logged; there is no error message or Retry control.
 - Users can submit another ordinary search after any completed request, including the same name.
 
 ## 2. Requirements and UI behavior
@@ -143,9 +143,6 @@ At this time, if a search fails for whatever reason, a HTTP status 500 will be r
 
 Error response will contain a stable `code` of `SEARCH_FAILED` and safe, generic `message` field of `Unable to complete search.`
 
-Errors preserve the API distinction between invalid input and provider failure even though this slice’s UI displays neither.
-
-
 Raw upstream responses are never returned to the client.
 
 ### Application services and ports
@@ -215,7 +212,7 @@ Logfire records backend request and provider spans, durations, outcomes, skipped
 |---|---|
 | Backend application | Query trimming and Unicode limits; invalid input makes no provider call; ordered seven-result cap; fake metadata failures. |
 | TMDB adapter | Repository fixture; first-page request; omitted language/content parameters; movie/TV hint normalization; absent portraits; missing hints; malformed people; all-malformed response; invalid envelope; timeout, rate limit, and upstream failures. |
-| HTTP contract | Success/error schemas and statuses; direct invalid requests; no identity fields; response cap; no-store header. |
+| HTTP contract | Success/error schemas and statuses; direct invalid requests; no identity fields; response cap; Cache-Control: private, max-age=60 for successful search results, no-store header for errors. |
 | Frontend application | Explicit submission; example submission; silent validation; duplicate pending submission; repeat completed submission; state transitions; disposal; late success and late failure suppression. |
 | UI components | Required hints; optional-field omission; portrait fallback and image failure; disabled controls; keyboard interaction; loading and empty states; blank failure state. |
 | Browser integration | Real frontend and FastAPI with a fixture-backed metadata adapter; search, examples, repeated queries, empty results, provider failure, and delayed responses. Stub external images. |
