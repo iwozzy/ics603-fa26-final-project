@@ -1,0 +1,16 @@
+{
+  "expo": {
+    "name": "Lumiere",
+    "slug": "lumiere",
+    "scheme": "lumiere",
+    "version": "0.1.0",
+    "platforms": ["web"],
+    "userInterfaceStyle": "light",
+    "experiments": { "typedRoutes": true },
+    "web": {
+      "bundler": "metro",
+      "name": "Lumiere"
+    },
+    "plugins": ["expo-router", "expo-status-bar"]
+  }
+}

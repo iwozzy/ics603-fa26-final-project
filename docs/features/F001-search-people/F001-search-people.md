@@ -89,7 +89,7 @@ This requires response-order protection rather than a cancellation framework. Ea
 
 ### Layout and accessibility
 
-- Use Expo, React Native Web, gluestack-ui, and UniWind.
+- Use Expo, Expo Router, React Native Web, gluestack-ui, and UniWind. Route modules live in `frontend/src/app/` and compose screens from the UI adapter.
 - Add only components needed for this screen; keep copied library components within the UI adapter.
 - Use a light theme, centered content, and a single-column result list.
 - Use a maximum content width of approximately 48rem, with fluid width and page padding on narrow browsers.
@@ -161,7 +161,7 @@ Raw upstream responses are never returned to the client.
 | Frontend search port | Async operation accepting a query and returning frontend application summaries. |
 | Frontend HTTP adapter | Call the backend, enforce its deadline, translate generated wire types, and classify transport failures. |
 | React screen and components | Bind controller state to controls, examples, result rows, and accessibility behavior. |
-| Frontend composition root | Assemble the HTTP adapter and controller and provide the gluestack theme. |
+| Frontend composition root | Expo Router's root layout and route modules assemble the HTTP adapter and controller and provide the gluestack theme. |
 
 Use plain Python application types and TypeScript application types. Generated OpenAPI types remain in the frontend HTTP boundary.
 
@@ -195,7 +195,7 @@ Browser assets may use normal browser caching; application search responses and 
 
 ### Foundation and observability
 
-- Retain the root Python project and introduce a Python `src` layout plus a separate frontend directory.
+- Keep the Python project in `backend/` with a `src` layout, alongside the separate `frontend/` project.
 - Preserve uv, Ruff, Pyrefly, pytest, the complexity limit, and the existing dependency-age policy.
 - Use npm with a committed lockfile.
 - Establish ESLint, TypeScript checks, jest-expo, React Native Testing Library, and Playwright.

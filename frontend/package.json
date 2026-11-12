@@ -1,0 +1,58 @@
+{
+  "name": "lumiere-frontend",
+  "version": "0.1.0",
+  "private": true,
+  "main": "expo-router/entry",
+  "engines": {
+    "node": "^22.13.0 || ^24.3.0 || ^26.0.0"
+  },
+  "scripts": {
+    "start": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo start --web --host localhost",
+    "build": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo export --platform web",
+    "expo:check": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 EXPO_OFFLINE=1 expo install --check",
+    "lint": "eslint . --fix --max-warnings 0",
+    "lint:check": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "typecheck": "tsc --noEmit",
+    "test": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 jest --ci --runInBand",
+    "test:e2e": "playwright test",
+    "api:generate": "node scripts/generate-api.mjs",
+    "api:check": "node scripts/generate-api.mjs --check",
+    "check": "npm run expo:check && npm run lint:check && npm run format:check && npm run typecheck && npm test && npm run api:check && npm run build"
+  },
+  "dependencies": {
+    "@expo/metro-runtime": "58.0.17",
+    "@gluestack-ui/core": "5.0.15",
+    "@gluestack-ui/utils": "5.0.6",
+    "expo": "~58.0.23",
+    "expo-constants": "~58.0.15",
+    "expo-linking": "~58.0.16",
+    "expo-router": "~58.0.30",
+    "expo-status-bar": "~58.0.4",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-native": "0.88.1",
+    "react-native-safe-area-context": "5.11.1",
+    "react-native-screens": "~4.30.1",
+    "react-native-svg": "15.16.0",
+    "react-native-web": "0.21.4",
+    "tailwindcss": "4.3.4",
+    "uniwind": "1.13.1"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.1",
+    "@testing-library/react-native": "14.1.0",
+    "@types/jest": "30.0.0",
+    "@types/node": "26.6.6",
+    "@types/react": "19.3.0",
+    "babel-preset-expo": "58.0.24",
+    "eslint": "9.39.5",
+    "eslint-config-expo": "58.0.4",
+    "jest": "30.5.2",
+    "jest-expo": "58.0.14",
+    "openapi-typescript": "7.13.0",
+    "prettier": "3.9.10",
+    "typescript": "5.9.3"
+  }
+}

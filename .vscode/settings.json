@@ -1,3 +1,14 @@
 {
-    "python.analysis.diagnosticsSource": "Pylance + Pyrefly"
+    "python.analysis.diagnosticsSource": "Pylance + Pyrefly",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
+    "js/ts.tsdk.path": "frontend/node_modules/typescript/lib",
+    "js/ts.tsdk.promptToUseWorkspaceVersion": true,
+    "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll.eslint": "explicit"
+        }
+    },
+    "prettier.requireConfig": true
 }

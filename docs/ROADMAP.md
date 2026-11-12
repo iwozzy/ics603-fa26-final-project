@@ -59,7 +59,7 @@ Clients never choose the acting user through a submitted user ID. Generate TypeS
 
 ## 4. Repository conventions, AGENTS.md, and validation
 
-Keep the root Python project and add a separate frontend directory. Use a Python `src` layout, dedicated tests and migrations, and feature specifications alongside the existing F001 artifacts. Avoid additional monorepo tooling initially.
+Keep separate `backend/` and `frontend/` projects in the repository. Use a Python `src` layout, dedicated tests and migrations within `backend/`, and feature specifications alongside the existing F001 artifacts. Avoid additional monorepo tooling initially.
 
 Use small feature branches and reviewable changes. Each feature brief should record user behavior, exclusions, contracts, failure behavior, and acceptance examples. Record architectural departures in short decision records and update affected documents in the same change.
 
