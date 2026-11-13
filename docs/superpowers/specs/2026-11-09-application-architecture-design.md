@@ -8,6 +8,8 @@ Scope: Starting architecture for the whole application; individual features will
 
 Amendment agreed on 2026-11-13 during F001 planning: deliver people search first and design following as the next feature. Do not cache people-search results on the server at this time; successful search responses use `Cache-Control: private, max-age=300` to permit browser caching. The [F001 design draft](2026-11-13-F001-search-people-design.md) records the feature details and proposals still awaiting approval. These two agreed changes supersede the original first-increment grouping and people-search-cache direction below.
 
+Additional F001 revisions agreed on 2026-11-13: people-search candidates remain transient, with provider-to-app ID mappings created only on explicit following in the next feature. All search API failures use HTTP `500`; clients silently show a blank results area for failures and successful empty results, without hint messages. Known-for recognition titles may include TV as well as movies. The TMDB adapter sends only the required query, allowing provider defaults, and constructs profile URLs with `https://image.tmdb.org/t/p/w180_and_h180_face/`. Successful search responses omit `Vary: Cookie`. These F001 exceptions take precedence over the general identity, movie-only, and typed HTTP-error directions below; app-owned identities and other feature policies still apply when catalog entities are retained in later features.
+
 ## Intent and document authority
 
 The application helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
@@ -152,7 +154,7 @@ A unit-of-work/transaction capability supports related local changes without exp
 
 ## Catalog identities, local data, and provenance
 
-**Agreed:** people and movies use app-owned identifiers. External identifiers are mappings keyed by provider and entity type. Follows, library facts, and timeline results reference internal identities. Actors and crew are people with credits that can contain multiple roles/jobs; they are not separate incompatible identity types.
+**Agreed:** people and movies use app-owned identifiers. External identifiers are mappings keyed by provider and entity type. Follows, library facts, and timeline results reference internal identities. Actors and crew are people with credits that can contain multiple roles/jobs; they are not separate incompatible identity types. **F001 exception agreed on 2026-11-13:** people-search candidates remain transient; search does not create app-owned catalog identities or retain source mappings. Identity mappings begin when the user explicitly follows someone in the next feature.
 
 Keep these concerns distinct:
 
@@ -247,7 +249,7 @@ Semantic search remains a future capability. Define separate embedding and retri
 
 **Proposed:** a JSON HTTP API under `/api/v1`, described using OpenAPI. Use stable operation names, explicit pagination, typed errors, and app-owned IDs. Generate client transport types and, where supported, runtime validators from the schema; keep generated code behind the client HTTP adapter. TypeScript types alone do not validate network responses. Zod is the proposed client runtime validation tool; server-side validation remains Pydantic. [FastAPI supports OpenAPI client generation](https://fastapi.tiangolo.com/advanced/generate-clients/) and [Zod provides runtime parsing](https://zod.dev/).
 
-Expose business outcomes such as followed, pending hydration, unavailable provider, and quota reset through stable API models rather than SQL job statuses or provider exceptions. Client retries of mutations must not create duplicate follows or library facts. Large result sets use bounded queries; timeline reads do not synchronously hydrate every movie.
+Expose business outcomes such as followed, pending hydration, unavailable provider, and quota reset through stable API models rather than SQL job statuses or provider exceptions. **F001 exception agreed on 2026-11-13:** people search returns HTTP `200` on success, including empty results, and HTTP `500` for every failure; the client silently displays a blank results area for empty results and failures, with no hint messages. Internal failure categories remain available to server telemetry/accounting. Client retries of mutations must not create duplicate follows or library facts. Large result sets use bounded queries; timeline reads do not synchronously hydrate every movie.
 
 Use ordinary request/response and bounded polling initially. SSE, streaming results, offline synchronization, and resumable AI jobs require their own feature decisions if needed. **Proposed initial AI execution:** bounded async request/response, with uploaded notes/photos treated as transient input rather than a persistent upload archive. If a later feature needs background media processing, add a blob-storage port and durable operation semantics rather than depending on a container filesystem.
 
