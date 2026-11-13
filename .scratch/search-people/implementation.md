@@ -53,4 +53,4 @@ Approved scope: centralize concrete adapter selection in startup, move provider-
 - Public API tests first failed for injected composition and replacement-provider selection, then passed after the corresponding changes. Existing integration tests continue using the real TMDB adapter over a controlled external transport through shared startup composition.
 - Full verification: 27 API + 27 browser tests passed; backend branch coverage is enabled and combined coverage is 85%. The search application module reports 100% coverage with branch tracking. Both typechecks, Ruff lint/format, ESLint, and Prettier checks passed. Contract regeneration produced no diff.
 - Real-TMDB smoke passed through the new composition: one provider attempt and one result, the requested 180×180 portrait, browser cache reuse, and content-free runtime output. Public API fields, headers, and UI behavior remain as specified.
-- Two-axis review pending.
+- [Two-axis review](architecture-review.md) complete: Standards 0 findings; Spec 0 findings. No unresolved issues.
