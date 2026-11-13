@@ -1,34 +1,26 @@
 import asyncio
 import json
 import logging
+from collections.abc import Callable
 from dataclasses import asdict
 from time import monotonic
 
-import httpx
 from fastapi import FastAPI, Request, Response
 
-from .admission import LocalAdmission
 from .config import Settings
 from .schemas import SearchResponse
-from .search import SearchUnavailable, search_people
-from .tmdb import TmdbPeople
+from .search import Admission, SearchOperation, SearchUnavailable, normalize_search_name
 
 logger = logging.getLogger("lumiere.operations")
 
 
-def create_api(settings: Settings, client: httpx.AsyncClient) -> FastAPI:
+def create_api(
+    settings: Settings,
+    search: SearchOperation,
+    incoming: Admission,
+    usage: Callable[[], dict[str, int]],
+) -> FastAPI:
     app = FastAPI(title="Lumiere", docs_url=None, redoc_url=None, openapi_url=None)
-    incoming = LocalAdmission(
-        settings.incoming_concurrency,
-        settings.admissions_per_minute,
-        settings.admission_total,
-    )
-    outgoing = LocalAdmission(
-        settings.outgoing_concurrency,
-        settings.admissions_per_minute,
-        settings.admission_total,
-    )
-    provider = TmdbPeople(client, settings, outgoing)
 
     @app.get("/api/people/search", response_model=SearchResponse)
     async def people(request: Request):
@@ -36,15 +28,14 @@ def create_api(settings: Settings, client: httpx.AsyncClient) -> FastAPI:
         outcome = "rejected"
         acquired = False
         try:
-            raw_query = request.query_params.get("query", "")
-            name = raw_query.strip()
+            name = normalize_search_name(
+                request.query_params.get("query", ""), settings.max_query_chars
+            )
             target_size = len(request.scope.get("raw_path", b"")) + len(
                 request.scope.get("query_string", b"")
             )
             if (
-                not name
-                or len(name) > settings.max_query_chars
-                or target_size > settings.max_target_bytes
+                target_size > settings.max_target_bytes
                 or request.headers.get("transfer-encoding")
                 or request.headers.get("content-length", "0") != "0"
             ):
@@ -55,7 +46,7 @@ def create_api(settings: Settings, client: httpx.AsyncClient) -> FastAPI:
                 raise SearchUnavailable()
             outcome = "failed"
             async with asyncio.timeout(settings.operation_timeout):
-                results = await search_people(name, provider)
+                results = await search(name)
             body = SearchResponse.model_validate(
                 {
                     "results": [
@@ -85,8 +76,7 @@ def create_api(settings: Settings, client: httpx.AsyncClient) -> FastAPI:
                         "operation": "people_search",
                         "outcome": outcome,
                         "elapsed_ms": round((monotonic() - start) * 1000, 2),
-                        "incoming_admitted": incoming.admitted,
-                        "provider_attempts": outgoing.admitted,
+                        **usage(),
                     }
                 )
             )

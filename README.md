@@ -103,7 +103,9 @@ To load the backend `.env` for the live check, use `uv run --directory backend -
 
 ## Boundaries and local settings
 
-`frontend/src/search/workflow.ts` owns draft/submission and request-generation rules independently of React or browser APIs. The HTTP adapter owns cancellation, deadlines, and runtime response validation. The rendered screen owns row reveal state. The API-specific Pydantic boundary is separate from application data and TMDB payloads. The backend capability port hides TMDB adaptation; runtime composition owns HTTP clients and logging. No catalog or identity records are created.
+`frontend/src/index.ts` selects the HTTP adapter and injects the `PeopleSearch` port into the screen. `frontend/src/search/workflow.ts` owns draft/submission and request-generation rules independently of React or browser APIs, using the client-owned data types in `search/model.ts`. The HTTP adapter validates generated API response types and translates them into that model. The mounted screen owns its workflow lifetime and row reveal state.
+
+`backend/lumiere/runtime.py` composes TMDB, local admission, the search operation, and usage counters. The FastAPI entry adapter receives the search capability and incoming-admission port; it handles HTTP validation, statuses, headers, and operation instrumentation. The plain-Python search operation validates names, deduplicates qualified provider references, and applies the seven-person and three-title limits. TMDB adaptation translates all usable first-page candidates. API-specific Pydantic schemas remain separate from application data and provider payloads. No catalog or identity records are created.
 
 The API accepts `GET /api/people/search?query=...`. Success contains only `results`, with up to seven distinct usable page-one people in provider order. It permits `private, max-age=60` browser caching. Blank/oversized input, admission refusal, and upstream errors return status 500 with an empty body and `no-store`. No automatic retries or application query cache are used.
 

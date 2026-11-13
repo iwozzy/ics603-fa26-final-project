@@ -10,9 +10,8 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
-import type { PersonResponse } from './api.generated';
-import { httpPeopleSearch } from './search/backend';
-import { createSearchWorkflow } from './search/workflow';
+import type { SearchPerson } from './search/model';
+import { createSearchWorkflow, type PeopleSearch } from './search/workflow';
 import './web.css';
 
 const examples = [
@@ -21,9 +20,9 @@ const examples = [
   ['Autumn Durald Arkapaw', 'Cinematographer'],
 ];
 
-function Portrait({ person }: { person: PersonResponse }) {
+function Portrait({ person }: { person: SearchPerson }) {
   const [failed, setFailed] = useState(false);
-  if (!person.portrait_url || failed) {
+  if (!person.portraitUrl || failed) {
     return (
       <View
         style={styles.portrait}
@@ -37,7 +36,7 @@ function Portrait({ person }: { person: PersonResponse }) {
   }
   return (
     <Image
-      source={{ uri: person.portrait_url }}
+      source={{ uri: person.portraitUrl }}
       accessibilityLabel={`Portrait of ${person.name}`}
       onError={() => setFailed(true)}
       style={styles.portrait}
@@ -45,11 +44,11 @@ function Portrait({ person }: { person: PersonResponse }) {
   );
 }
 
-export default function App() {
-  const [workflow] = useState(() => createSearchWorkflow(httpPeopleSearch));
+export default function App({ peopleSearch }: { peopleSearch: PeopleSearch }) {
+  const [workflow] = useState(() => createSearchWorkflow(peopleSearch));
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot);
   const [rowReveal, setRowReveal] = useState<{
-    results: PersonResponse[];
+    results: SearchPerson[];
     personId: string | null;
   } | null>(null);
   const revealed =
@@ -151,10 +150,10 @@ export default function App() {
           style={styles.results}
         >
           {state.results.map((person) => {
-            const id = person.provider_ref.id;
+            const id = `${person.providerRef.provider}/${person.providerRef.entityType}/${person.providerRef.id}`;
             const secondary = [
               person.department,
-              person.known_for.length ? person.known_for.join(', ') : null,
+              person.knownFor.length ? person.knownFor.join(', ') : null,
             ]
               .filter(Boolean)
               .join(' • ');

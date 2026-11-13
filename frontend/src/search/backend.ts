@@ -27,7 +27,17 @@ export const httpPeopleSearch: PeopleSearch = {
         );
         if (new Set(ids).size !== ids.length)
           throw new Error('Invalid search response');
-        return body.results;
+        return body.results.map((person) => ({
+          providerRef: {
+            provider: person.provider_ref.provider,
+            entityType: person.provider_ref.entity_type,
+            id: person.provider_ref.id,
+          },
+          name: person.name,
+          portraitUrl: person.portrait_url,
+          department: person.department,
+          knownFor: [...person.known_for],
+        }));
       } finally {
         clearTimeout(deadline);
       }

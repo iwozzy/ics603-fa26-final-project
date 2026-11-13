@@ -10,9 +10,8 @@ from fastapi import Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from lumiere.api import create_api
 from lumiere.config import Settings
-from lumiere.runtime import configure_logging
+from lumiere.runtime import compose_api, configure_logging
 
 configure_logging()
 scenarios = {}
@@ -35,7 +34,7 @@ class LocalTmdbTransport(httpx.AsyncBaseTransport):
 
 
 client = httpx.AsyncClient(transport=LocalTmdbTransport())
-app = create_api(
+app = compose_api(
     Settings(
         tmdb_token="deterministic-test-token",
         admission_total=10000,

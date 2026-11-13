@@ -41,24 +41,21 @@ def _recognition_titles(known_for: Any) -> tuple[str, ...]:
         label = nonblank(credit.get(field)) if field else None
         if label:
             titles.append(label)
-        if len(titles) == 3:
-            break
     return tuple(titles)
 
 
 def normalize(payload: Any) -> list[SearchPerson]:
+    """Translate usable page-one candidates; the application owns result selection."""
     envelope = SearchEnvelope.model_validate(payload)
     people = []
-    seen = set()
     for raw in envelope.results:
         try:
             row = PersonPayload.model_validate(raw)
         except ValidationError:
             continue
         name = nonblank(row.name)
-        if row.id <= 0 or not name or row.id in seen:
+        if row.id <= 0 or not name:
             continue
-        seen.add(row.id)
         path = nonblank(row.profile_path)
         portrait = None
         if path and re.fullmatch(
@@ -74,8 +71,6 @@ def normalize(payload: Any) -> list[SearchPerson]:
                 _recognition_titles(row.known_for),
             )
         )
-        if len(people) == 7:
-            break
     return people
 
 

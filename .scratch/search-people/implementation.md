@@ -42,3 +42,15 @@ Verification after relocation: all 25 API + 23 browser tests passed; TypeScript/
 The product is **Lumiere**. App display metadata and the frontend npm package now use `Lumiere` / `lumiere`. The backend Python package is `backend/lumiere/`, its project metadata is `lumiere-backend`, and logging uses `lumiere.operations`. Numeric configuration keys now use `LUMIERE_<SETTING>`; README commands and the server configuration template match. Existing planning-skill identifiers and quoted historical review details retain their original names.
 
 Verification: all 25 API + 23 browser cases, typechecks, lint, and formatting checks passed. The generated web document title is `Lumiere`, configuration reads the new environment prefix, and contract generation is unchanged. The renamed runtime passed the live search/portrait/cache/log smoke check. Dependency versions and artifacts are unchanged.
+
+## Ports and adapters refinement
+
+Approved scope: centralize concrete adapter selection in startup, move provider-independent selection into the backend application operation, give the client workflow its own recognition model, and inject the frontend search port from startup. Starting commit: `48af2ab056c3cb3c1df44f17fe97ebbb81a1e9da`.
+
+- `runtime.compose_api` selects TMDB and local admission adapters, binds the application search operation, and supplies operational counters. The FastAPI factory receives capabilities and uses the application-owned name validator before incoming admission. The operation also validates when called independently.
+- `search.search_people` owns qualified-reference deduplication, provider-order retention, the seven-person limit, and the three-title limit. TMDB translation supplies all usable page-one candidates.
+- Frontend `index.ts` supplies the HTTP adapter through `PeopleSearch`. Workflow and presentation use `search/model.ts`; the HTTP adapter alone validates and maps generated wire responses into that model.
+- Public API tests first failed for injected composition and replacement-provider selection, then passed after the corresponding changes. Existing integration tests continue using the real TMDB adapter over a controlled external transport through shared startup composition.
+- Full verification: 27 API + 27 browser tests passed; backend branch coverage is enabled and combined coverage is 85%. The search application module reports 100% coverage with branch tracking. Both typechecks, Ruff lint/format, ESLint, and Prettier checks passed. Contract regeneration produced no diff.
+- Real-TMDB smoke passed through the new composition: one provider attempt and one result, the requested 180×180 portrait, browser cache reuse, and content-free runtime output. Public API fields, headers, and UI behavior remain as specified.
+- Two-axis review pending.

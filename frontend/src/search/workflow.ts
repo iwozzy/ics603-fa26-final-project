@@ -1,7 +1,7 @@
-import type { PersonResponse } from '../api.generated';
+import type { SearchPerson } from './model';
 
 export interface SearchRequest {
-  result: Promise<PersonResponse[]>;
+  result: Promise<SearchPerson[]>;
   cancel(): void;
 }
 export interface PeopleSearch {
@@ -11,7 +11,7 @@ export interface SearchState {
   draft: string;
   submitted: string | null;
   loading: boolean;
-  results: PersonResponse[];
+  results: SearchPerson[];
 }
 
 /** A mounted screen owns one workflow; submitting or clearing supersedes pending work. */

@@ -1,8 +1,102 @@
+from functools import partial
+
 import httpx
 import pytest
 
 from lumiere.api import create_api
 from lumiere.config import Settings
+from lumiere.runtime import compose_api
+from lumiere.search import ProviderRef, SearchPerson, search_people
+
+
+class PermittedAdmission:
+    def acquire(self):
+        return True
+
+    def release(self):
+        pass
+
+
+async def test_public_api_accepts_an_injected_search_capability():
+    async def search(name):
+        return [SearchPerson(ProviderRef("tmdb", "person", "42"), name, None, None, ())]
+
+    app = create_api(
+        Settings(),
+        search,
+        PermittedAdmission(),
+        lambda: {"incoming_admitted": 1, "provider_attempts": 0},
+    )
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://test"
+    ) as client:
+        response = await client.get(
+            "/api/people/search", params={"query": "  Supplied search  "}
+        )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "results": [
+            {
+                "provider_ref": {
+                    "provider": "tmdb",
+                    "entity_type": "person",
+                    "id": "42",
+                },
+                "name": "Supplied search",
+                "portrait_url": None,
+                "department": None,
+                "known_for": [],
+            }
+        ]
+    }
+
+
+async def test_result_selection_is_independent_of_the_provider_adapter():
+    class ReplacementProvider:
+        async def search_people(self, name):
+            return [
+                SearchPerson(
+                    ProviderRef("tmdb", "person", "1"),
+                    "First",
+                    None,
+                    None,
+                    ("One", "Two", "Three", "Four"),
+                ),
+                SearchPerson(
+                    ProviderRef("tmdb", "person", "1"), "Duplicate", None, None, ()
+                ),
+                *[
+                    SearchPerson(
+                        ProviderRef("tmdb", "person", str(n)),
+                        f"Person {n}",
+                        None,
+                        None,
+                        (),
+                    )
+                    for n in range(2, 10)
+                ],
+            ]
+
+    search = partial(search_people, provider=ReplacementProvider(), max_query_chars=200)
+    app = create_api(Settings(), search, PermittedAdmission(), dict)
+    async with httpx.AsyncClient(
+        transport=httpx.ASGITransport(app), base_url="http://test"
+    ) as client:
+        response = await client.get("/api/people/search?query=First")
+
+    assert response.status_code == 200
+    people = response.json()["results"]
+    assert [row["name"] for row in people] == [
+        "First",
+        "Person 2",
+        "Person 3",
+        "Person 4",
+        "Person 5",
+        "Person 6",
+        "Person 7",
+    ]
+    assert people[0]["known_for"] == ["One", "Two", "Three"]
 
 
 @pytest.mark.asyncio
@@ -31,7 +125,7 @@ async def test_search_translates_first_page_into_small_transient_contract():
         )
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider:
-        app = create_api(Settings(tmdb_token="test-secret"), provider)
+        app = compose_api(Settings(tmdb_token="test-secret"), provider)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app), base_url="http://test"
         ) as client:
@@ -74,7 +168,7 @@ async def request_with(
         return httpx.Response(status, json=payload)
 
     async with httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider:
-        app = create_api(settings or Settings(tmdb_token="test-secret"), provider)
+        app = compose_api(settings or Settings(tmdb_token="test-secret"), provider)
         async with httpx.AsyncClient(
             transport=httpx.ASGITransport(app), base_url="http://test"
         ) as client:
@@ -218,7 +312,7 @@ async def test_public_api_bounds_incoming_and_outgoing_work_without_waiting():
     async with (
         httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider,
         httpx.AsyncClient(
-            transport=httpx.ASGITransport(create_api(settings, provider)),
+            transport=httpx.ASGITransport(compose_api(settings, provider)),
             base_url="http://test",
         ) as client,
     ):
@@ -251,7 +345,7 @@ async def test_total_provider_deadline_is_bounded_and_logs_exclude_content(caplo
     async with (
         httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider,
         httpx.AsyncClient(
-            transport=httpx.ASGITransport(create_api(settings, provider)),
+            transport=httpx.ASGITransport(compose_api(settings, provider)),
             base_url="http://test",
         ) as client,
     ):
@@ -284,7 +378,7 @@ async def test_incoming_admission_refuses_before_provider_and_never_retries(boun
     async with (
         httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider,
         httpx.AsyncClient(
-            transport=httpx.ASGITransport(create_api(settings, provider)),
+            transport=httpx.ASGITransport(compose_api(settings, provider)),
             base_url="http://test",
         ) as client,
     ):
@@ -318,7 +412,7 @@ async def test_api_rejects_search_request_bodies_and_encoded_request_targets():
         httpx.AsyncClient(transport=httpx.MockTransport(tmdb)) as provider,
         httpx.AsyncClient(
             transport=httpx.ASGITransport(
-                create_api(Settings(tmdb_token="test"), provider)
+                compose_api(Settings(tmdb_token="test"), provider)
             ),
             base_url="http://test",
         ) as client,
