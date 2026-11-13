@@ -7,3 +7,15 @@ __pycache__/
 #
 **/.env
 **/.DS_Store
+
+# Application tooling and generated runtime artifacts
+node_modules/
+.expo/
+dist/
+test-results/
+playwright-report/
+.pytest_cache/
+.ruff_cache/
+*.egg-info/
+.env.*
+!.env.example
