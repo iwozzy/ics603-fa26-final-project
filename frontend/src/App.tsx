@@ -25,11 +25,11 @@ function Portrait({ person }: { person: PersonResponse }) {
 export default function App() {
   const [workflow] = useState(() => createSearchWorkflow(httpPeopleSearch));
   const state = useSyncExternalStore(workflow.subscribe, workflow.snapshot);
-  const [revealed, setRevealed] = useState<string | null>(null);
+  const [rowReveal, setRowReveal] = useState<{ results: PersonResponse[]; personId: string | null } | null>(null);
+  const revealed = rowReveal?.results === state.results ? rowReveal.personId : null;
   const { width, height } = useWindowDimensions();
   const narrow = width < 600;
   useEffect(() => () => workflow.dispose(), [workflow]);
-  useEffect(() => setRevealed(null), [state.results]);
 
   return <ScrollView style={styles.page} contentContainerStyle={{ minHeight: height }} keyboardShouldPersistTaps="handled">
     <View style={[styles.content, { paddingTop: narrow ? 64 : Math.max(72, height * 0.25), paddingHorizontal: narrow ? 20 : 32 }]}>
@@ -64,7 +64,7 @@ export default function App() {
           const id = person.provider_ref.id;
           const secondary = [person.department, person.known_for.length ? person.known_for.join(', ') : null].filter(Boolean).join(' • ');
           return <Pressable key={id} testID="person-row" accessibilityLabel={person.name} role="group"
-            onPress={() => setRevealed(value => value === id ? null : id)}
+            onPress={() => setRowReveal({ results: state.results, personId: revealed === id ? null : id })}
             style={({ pressed }) => [styles.row, { gap: narrow ? 12 : 18, backgroundColor: pressed ? '#f5f6f7' : 'transparent' }]}>
             <Portrait person={person} />
             <View style={styles.personText}>

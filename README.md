@@ -22,6 +22,7 @@ frontend/
   app.json
   tsconfig.json
   playwright.config.ts
+  eslint.config.cjs       Expo ESLint rules and complexity limit
 docs/                     Shared architecture and design references
 .scratch/                 Specs, issues, and verification evidence
 ```
@@ -56,12 +57,15 @@ For frontend hot reload, run `npm --prefix frontend run web` and the API separat
 Install Chromium once with `(cd frontend && npx playwright install chromium)`, then run:
 
 ```sh
+npm --prefix frontend run lint
 npm --prefix frontend run typecheck
 uv run --directory backend ty check lumiere scripts tests
 uv run --directory backend ruff check lumiere scripts tests
 uv run --directory backend pytest tests
 npm --prefix frontend test
 ```
+
+Frontend linting uses the [Expo ESLint preset](https://docs.expo.dev/guides/using-eslint/) with `complexity: ['error', { max: 10 }]`. Run it with `npm --prefix frontend run lint`; source, tests, and scripts are checked, while generated API types and build/test output are excluded.
 
 The backend command runs the direct API tests. The frontend test command exports the web app and runs Chromium against the real application API using the controlled external TMDB server in `backend/tests/support/`. Browser tests need permission to open loopback listeners and launch Chromium. They do not require a real token or contact TMDB; image-fallback scenarios stub the image host.
 
