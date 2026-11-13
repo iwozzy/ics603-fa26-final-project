@@ -9,6 +9,7 @@ import httpx
 from fastapi import Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
+
 from wayfinder.api import create_api
 from wayfinder.config import Settings
 from wayfinder.runtime import configure_logging
@@ -99,4 +100,5 @@ async def tmdb(request: Request):
     )
 
 
-app.mount("/", StaticFiles(directory=Path("dist"), html=True))
+static = Path(__file__).resolve().parents[3] / "frontend" / "dist"
+app.mount("/", StaticFiles(directory=static, html=True))

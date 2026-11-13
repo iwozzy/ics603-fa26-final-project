@@ -1,5 +1,6 @@
 import httpx
 import pytest
+
 from wayfinder.api import create_api
 from wayfinder.config import Settings
 

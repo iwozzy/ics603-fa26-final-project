@@ -28,3 +28,11 @@ The spec's Testing Decisions already confirm the web/public API seams. Use red �
 - Final full suite on SDK 58: `npm test` passed 25 API + 23 Chromium cases (including actual HTTP-cache reuse and the eight-second client deadline). `npm run typecheck` and `npm run check:python` passed.
 - Repeated live smoke on the final SDK 58 build passed with the same evidence: one attempt, one result, 180×180 portrait, cache transfer bytes `[594, 0]`, content excluded from runtime logs.
 - [Two-axis review](review.md) complete: Standards 0 findings; Spec 1 P2 deadline-configuration finding, corrected and independently rechecked. Startup now rejects backend deadlines exceeding the browser budget. The final full regression run passed all 25 API + 23 browser cases again after the correction; both typechecks/lint also passed. Contract regeneration produced no diff.
+
+## Repository organization follow-up
+
+The application files now live in `backend/` and `frontend/`. Python configuration, lockfile, runtime, API tests, contract exporter, and controlled provider server belong to `backend/`. Expo source is in `frontend/src/`, with npm configuration/lockfile, browser tests, and the live smoke script under `frontend/`. Each directory owns its tool artifacts and ignore rules; shared project documentation remains at the root.
+
+Current commands are documented in [README](../../README.md). From the repository root, use `uv run --directory backend pytest tests` for API tests and `npm --prefix frontend test` for the frontend build/browser tests. Generate contracts with `npm --prefix frontend run contract`.
+
+Verification after relocation: all 25 API + 23 browser tests passed; TypeScript/Python typechecks, Ruff lint, and formatting checks passed. Both dependency lockfiles and generated API contract files retained identical contents. The relocated live smoke check passed: one provider attempt, one result, 180×180 portrait, browser cache reuse (`[594, 0]` transfer bytes), and content-free runtime logs. Paths and commands quoted in the original implementation review describe the pre-reorganization commit.

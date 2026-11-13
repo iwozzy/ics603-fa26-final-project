@@ -2,10 +2,12 @@
 import { spawn } from 'node:child_process';
 import { chromium } from '@playwright/test';
 import assert from 'node:assert/strict';
+import { fileURLToPath } from 'node:url';
 
 if (!process.env.TMDB_API_READ_ACCESS_TOKEN) throw new Error('Set TMDB_API_READ_ACCESS_TOKEN');
-const server = spawn('uv', ['run', 'uvicorn', 'wayfinder.runtime:create_app', '--factory', '--app-dir', 'backend', '--host', '127.0.0.1', '--port', '8767', '--no-access-log'], {
-  env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
+const backendDirectory = fileURLToPath(new URL('../../backend/', import.meta.url));
+const server = spawn('uv', ['run', 'uvicorn', 'wayfinder.runtime:create_app', '--factory', '--app-dir', '.', '--host', '127.0.0.1', '--port', '8767', '--no-access-log'], {
+  cwd: backendDirectory, env: process.env, stdio: ['ignore', 'pipe', 'pipe'],
 });
 let output = '';
 server.stdout.on('data', chunk => { output += chunk; });

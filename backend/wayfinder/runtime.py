@@ -33,7 +33,7 @@ def create_app():
             yield
 
     app.router.lifespan_context = lifespan
-    static = Path(__file__).resolve().parents[2] / "dist"
+    static = Path(__file__).resolve().parents[2] / "frontend" / "dist"
     if static.is_dir():
         app.mount("/", StaticFiles(directory=static, html=True))
     return app
