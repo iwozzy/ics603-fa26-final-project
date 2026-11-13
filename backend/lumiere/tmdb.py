@@ -30,6 +30,22 @@ def nonblank(value: Any) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
+def _recognition_titles(known_for: Any) -> tuple[str, ...]:
+    if not isinstance(known_for, list):
+        return ()
+    titles = []
+    for credit in known_for:
+        if not isinstance(credit, dict):
+            continue
+        field = {"movie": "title", "tv": "name"}.get(str(credit.get("media_type")))
+        label = nonblank(credit.get(field)) if field else None
+        if label:
+            titles.append(label)
+        if len(titles) == 3:
+            break
+    return tuple(titles)
+
+
 def normalize(payload: Any) -> list[SearchPerson]:
     envelope = SearchEnvelope.model_validate(payload)
     people = []
@@ -49,26 +65,13 @@ def normalize(payload: Any) -> list[SearchPerson]:
             r"/+[A-Za-z0-9_-]+\.(?:jpg|jpeg|png|webp)", path, re.IGNORECASE
         ):
             portrait = PORTRAIT_BASE + path.lstrip("/")
-        titles = []
-        if isinstance(row.known_for, list):
-            for credit in row.known_for:
-                if not isinstance(credit, dict):
-                    continue
-                field = {"movie": "title", "tv": "name"}.get(
-                    str(credit.get("media_type"))
-                )
-                label = nonblank(credit.get(field)) if field else None
-                if label:
-                    titles.append(label)
-                if len(titles) == 3:
-                    break
         people.append(
             SearchPerson(
                 ProviderRef("tmdb", "person", str(row.id)),
                 name,
                 portrait,
                 nonblank(row.known_for_department),
-                tuple(titles),
+                _recognition_titles(row.known_for),
             )
         )
         if len(people) == 7:
