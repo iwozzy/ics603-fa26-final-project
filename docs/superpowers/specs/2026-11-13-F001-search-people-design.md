@@ -2,7 +2,7 @@
 
 Date: 2026-11-13
 
-Status: Draft for owner approval. Product decisions below were agreed in conversation; implementation proposals remain reviewable. Revised following owner feedback on 2026-11-13.
+Status: Approved by the project owner on 2026-11-13, after revisions and clarifications. Details labeled author proposals were accepted with this approval; explicitly deferred decisions remain deferred.
 
 ## Intent and scope
 
@@ -79,7 +79,7 @@ Failure:  (Blank results area; input remains visible; spinner stops.)
 
 The example-search guidance remains visible in the initial and loading states as shown in the wireframes. After a search completes, show the results or leave the results area blank; do not replace empty results or failures with guidance. Example names and role descriptions are illustrative text, not interactive search controls in this increment (an author proposal).
 
-The following details are **author proposals**, rather than additional owner decisions:
+The following details originated as **author proposals** and were accepted with approval of this design:
 
 - Trim surrounding query whitespace on client and server. Accept 1–200 Unicode code points after trimming. Blank or overlong client submissions clear the results without a request or validation message. Invalid requests reaching the API fail with `500` and no provider call. Preserve internal whitespace, case, accents, and punctuation. This is an application limit, not a claim about TMDB.
 - Keep the search-field placeholder and agreed example-search guidance from the wireframes. Add no refine-query suggestions or other hint messages.
@@ -190,7 +190,7 @@ Use the captured [TMDB fixture](../../samples/api/tmdb/v3/search/person.json) an
 
 Choose package paths, package manager, styling, code-generation/runtime-validation tooling, test runners, migration naming, session-bootstrap route, and deploy host consistently with the architecture. Choose/document operational thresholds before live dispatch. These choices must preserve the agreed submission, eligibility, order, page, limit, failure, blank-presentation, title, image, identity-deferral, and cache rules.
 
-No product code, scaffolding, dependency installation, or implementation plan is authorized by this draft alone. After owner approval, the next step is an implementation plan.
+The owner approved this design on 2026-11-13. The next step is an implementation plan for review; product code, scaffolding, and dependency installation begin after the plan handoff and choice of execution method.
 
 ## References
 
