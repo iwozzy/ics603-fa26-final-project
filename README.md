@@ -123,4 +123,4 @@ Only allowlisted JSON operation events are logged: outcome, elapsed milliseconds
 
 Public hosting and native releases are outside this increment. Before public exposure, resolve and verify durable global accounting across processes/restarts, operator quota controls and approximation tolerances, HTTPS/HTTP/2, telemetry access/retention, TMDB attribution/terms and operating cost feasibility. The local in-memory allowance and successful smoke check do not establish release readiness.
 
-Implementation references: [feature spec](.scratch/search-people/spec.md), [architecture](docs/adr/0001-app-architecture.md), [Expo web setup](https://docs.expo.dev/workflow/web/), [Expo SDK 58](https://docs.expo.dev/versions/latest/).
+Implementation references: [feature spec](.scratch/search-people/spec.md), [feature architecture diagram](.scratch/search-people/architecture.md), [architecture](docs/adr/0001-app-architecture.md), [Expo web setup](https://docs.expo.dev/workflow/web/), [Expo SDK 58](https://docs.expo.dev/versions/latest/).
