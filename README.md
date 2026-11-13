@@ -76,6 +76,12 @@ The backend command runs the direct API tests. The frontend test command exports
 
 Run an individual API file with `uv run --directory backend pytest tests/test_people_api.py`. Within `frontend/`, after exporting, use `npx playwright test tests/e2e/search.spec.ts` or `tests/e2e/presentation.spec.ts`.
 
+Backend coverage is available through pytest-cov:
+
+```sh
+uv run --directory backend pytest tests --cov=lumiere --cov-report=term-missing
+```
+
 Regenerate the JSON Schema and TypeScript API types after editing `backend/lumiere/schemas.py`:
 
 ```sh
