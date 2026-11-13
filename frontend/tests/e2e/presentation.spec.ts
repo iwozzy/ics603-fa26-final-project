@@ -29,6 +29,34 @@ test.beforeEach(async ({ request }) => {
   await request.post('/__test/reset', { data: { People: { payload } } });
 });
 
+test('focus outlines the entire search box for pointer and keyboard input', async ({
+  page,
+}) => {
+  await page.goto('/');
+  const input = page.getByRole('textbox');
+  const box = page.getByTestId('search-box');
+  const search = page.getByRole('button', { name: 'Search', exact: true });
+  await input.click();
+  await expect(input).toBeFocused();
+  await expect(box).toHaveCSS('outline-style', 'solid');
+  await expect(box).toHaveCSS('outline-width', '2px');
+  await expect(input).toHaveCSS('outline-style', 'none');
+  await input.fill('People');
+  await input.press('Tab');
+  await expect(search).toBeFocused();
+  await expect(box).toHaveCSS('outline-style', 'solid');
+  await expect(search).toHaveCSS('outline-style', 'none');
+  await search.press('Tab');
+  await expect(box).toHaveCSS('outline-style', 'none');
+  await page.setViewportSize({ width: 375, height: 812 });
+  await input.click();
+  await expect(box).toHaveCSS('outline-style', 'solid');
+  await expect(input).toHaveCSS('outline-style', 'none');
+  await page.screenshot({
+    path: '/private/tmp/lumiere-search-focus-narrow.png',
+  });
+});
+
 test('portraits fall back, missing secondary text has no separators, and keyboard focus reveals disabled Follow', async ({
   page,
 }) => {

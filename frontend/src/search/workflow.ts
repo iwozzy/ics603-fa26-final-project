@@ -14,7 +14,7 @@ export interface SearchState {
   results: PersonResponse[];
 }
 
-/** A mounted screen owns one workflow; submission alone supersedes pending work. */
+/** A mounted screen owns one workflow; submitting or clearing supersedes pending work. */
 export function createSearchWorkflow(backend: PeopleSearch) {
   let state: SearchState = {
     draft: '',
@@ -40,6 +40,14 @@ export function createSearchWorkflow(backend: PeopleSearch) {
       };
     },
     edit(draft: string) {
+      if (disposed) return;
+      if (!draft.trim()) {
+        ++generation;
+        active?.cancel();
+        active = undefined;
+        update({ draft, submitted: null, loading: false, results: [] });
+        return;
+      }
       update({ ...state, draft });
     },
     submit(draft = state.draft) {

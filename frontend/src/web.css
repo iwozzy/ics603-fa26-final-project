@@ -7,6 +7,13 @@ body,
   outline: 2px solid #596e89;
   outline-offset: 4px;
 }
+[data-testid='search-box']:focus-within {
+  outline: 2px solid #596e89;
+  outline-offset: 4px;
+}
+[data-testid='search-box'] :focus {
+  outline: none;
+}
 [data-testid='person-row']:focus-visible [data-testid='follow-container'] {
   opacity: 1;
 }

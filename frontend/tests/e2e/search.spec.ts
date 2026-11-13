@@ -29,7 +29,32 @@ test('typing is separate from submission, and the API renders recognition metada
   ]);
 });
 
-test('draft edits and clearing preserve displayed and pending submitted results', async ({
+test('clearing a completed search restores the initial examples without another request', async ({
+  page,
+  request,
+}) => {
+  const input = page.getByRole('textbox');
+  await input.fill('First');
+  await input.press('Enter');
+  await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
+  await input.clear();
+  await expect(page.getByText('Example searches:')).toBeVisible();
+  await expect(page.getByTestId('results')).toBeEmpty();
+  await expect(page.getByLabel('Searching', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByRole('button', { name: 'Search', exact: true }),
+  ).toBeDisabled();
+  expect(await (await request.get('/__test/attempts')).json()).toEqual([
+    { query: 'First', page: '1' },
+  ]);
+  await page
+    .getByText('Hayao Miyazaki (Director, Writer)', { exact: true })
+    .click();
+  await expect(input).toHaveValue('Hayao Miyazaki');
+  await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
+});
+
+test('nonblank draft edits preserve displayed and pending submitted results', async ({
   page,
   request,
 }) => {
@@ -43,23 +68,63 @@ test('draft edits and clearing preserve displayed and pending submitted results'
   await input.fill('unsubmitted edit');
   await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
   await expect(input).toHaveValue('unsubmitted edit');
-  await input.clear();
+  await input.fill('another unsubmitted edit');
   await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
-  await expect(
-    page.getByRole('button', { name: 'Search', exact: true }),
-  ).toBeDisabled();
   await input.fill('Second');
   await page.getByRole('button', { name: 'Search', exact: true }).click();
   await expect(page.getByText('Tom Skerritt', { exact: true })).toHaveCount(0);
   await expect(page.getByLabel('Searching', { exact: true })).toBeVisible();
-  await input.clear();
+  await input.fill('pending edit');
   await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
-  await expect(input).toHaveValue('');
+  await expect(input).toHaveValue('pending edit');
   expect(await (await request.get('/__test/attempts')).json()).toEqual([
     { query: 'First', page: '1' },
     { query: 'Second', page: '1' },
   ]);
 });
+
+for (const status of [200, 503]) {
+  test(`clearing a pending search ignores its late ${status} outcome`, async ({
+    page,
+    request,
+  }) => {
+    await page.addInitScript(() => {
+      const original = window.fetch;
+      window.fetch = (url, options) =>
+        original(url, { ...options, signal: undefined });
+    });
+    await page.reload();
+    await request.post('/__test/reset', {
+      data: { Pending: { delay: 0.4, status } },
+    });
+    const input = page.getByRole('textbox');
+    const completion = page.waitForResponse((response) =>
+      response.url().includes('/api/people/search'),
+    );
+    await input.fill('Pending');
+    await input.press('Enter');
+    await expect
+      .poll(
+        async () =>
+          (await (await request.get('/__test/attempts')).json()).length,
+      )
+      .toBe(1);
+    await input.fill('   ');
+    await expect(page.getByText('Example searches:')).toBeVisible();
+    await expect(page.getByLabel('Searching', { exact: true })).toHaveCount(0);
+    await expect(page.getByTestId('results')).toBeEmpty();
+    await input.fill('next draft');
+    await (await completion).finished();
+    // Allow the known external completion to reach the rendered workflow.
+    await page.waitForTimeout(100);
+    await expect(page.getByText('Example searches:')).toBeVisible();
+    await expect(page.getByTestId('results')).toBeEmpty();
+    await expect(input).toHaveValue('next draft');
+    expect(await (await request.get('/__test/attempts')).json()).toEqual([
+      { query: 'Pending', page: '1' },
+    ]);
+  });
+}
 
 for (const [name, role] of [
   ['Timothée Chalamet', 'Actor'],

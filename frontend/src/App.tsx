@@ -94,7 +94,7 @@ export default function App() {
             <Text style={[styles.tabText, styles.muted]}>Movies</Text>
           </Pressable>
         </View>
-        <View style={styles.searchBox}>
+        <View testID="search-box" style={styles.searchBox}>
           <TextInput
             accessibilityLabel="Search cast and crew"
             placeholder="Search for actors, directors, or creative team to follow"
