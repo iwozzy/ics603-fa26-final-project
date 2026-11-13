@@ -22,6 +22,10 @@ class Settings:
             value = getattr(self, field.name)
             if field.name != "tmdb_token" and (value <= 0 or not math.isfinite(value)):
                 raise ValueError(f"Invalid setting: {field.name}")
+        if self.operation_timeout > 7:
+            raise ValueError(
+                "Operation timeout must be at most 7 seconds for the 8-second client deadline"
+            )
         if self.operation_timeout <= self.provider_timeout:
             raise ValueError("Operation timeout must exceed provider timeout")
 

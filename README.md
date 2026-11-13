@@ -64,7 +64,7 @@ All numeric settings below are positive and configurable through `WAYFINDER_<SET
 | Setting | Default | Meaning |
 | --- | --- | --- |
 | `PROVIDER_TIMEOUT` | 5 seconds | Total upstream deadline, including reading the response |
-| `OPERATION_TIMEOUT` | 6 seconds | Backend operation deadline; must exceed provider deadline |
+| `OPERATION_TIMEOUT` | 6 seconds | Backend operation deadline; must exceed provider deadline and be at most 7 seconds |
 | `MAX_QUERY_CHARS` | 200 | Trimmed Unicode code points |
 | `MAX_TARGET_BYTES` | 4096 | Encoded raw path and query string |
 | `MAX_PROVIDER_BYTES` | 1048576 | Decoded upstream response bytes |

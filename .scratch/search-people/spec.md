@@ -1,6 +1,6 @@
 # Search people
 
-Status: open
+Status: resolved
 Labels: ready-for-agent
 Planning: accepted on 2026-11-12 (Pacific/Honolulu)
 
@@ -148,3 +148,9 @@ Later requirements to Follow/save people trigger persistence and app-owned ident
 ### Publication from the accepted conversation — 2026-11-12 (Pacific/Honolulu)
 
 Published through the to-spec skill to the repository's local Markdown tracker with `ready-for-agent`. The earlier scratch specification/tickets were absent in this checkout; this publication creates only the requested template-based specification and does not restore removed tickets. The accepted Q26–Q27 testing seam and final planning confirmation carry forward.
+
+### Local implementation completed — 2026-11-12 (Pacific/Honolulu)
+
+Implemented and verified the local Expo/React Native for Web and async Python workflow. The full deterministic suite passed 25 API and 23 browser cases; TypeScript/Python checks and lint passed. A configured real-TMDB browser smoke verified one search attempt, the requested 180×180 portrait transform, actual HTTP-cache reuse, and content-free operational output. The independent standards/spec review found one deadline-configuration gap, which was corrected and rechecked.
+
+See [startup and verification](../../README.md), [implementation choices and evidence](implementation.md), and [two-axis review](review.md). Public deployment, durable global accounting, and native delivery remain the explicitly separate release work.
