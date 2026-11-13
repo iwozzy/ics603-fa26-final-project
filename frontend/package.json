@@ -10,7 +10,9 @@
     "test": "npm run build:web && playwright test",
     "contract": "uv run --directory ../backend python scripts/export_contract.py && json2ts -i src/api.schema.json -o src/api.generated.ts --bannerComment ''",
     "smoke:live": "node scripts/smoke-live.mjs",
-    "lint": "eslint . --max-warnings=0"
+    "lint": "eslint . --max-warnings=0",
+    "format": "prettier --write .",
+    "format:check": "prettier --check ."
   },
   "dependencies": {
     "@expo/metro-runtime": "~58.0.17",
@@ -26,7 +28,9 @@
     "ajv": "^8.17.1",
     "eslint": "^9.39.5",
     "eslint-config-expo": "^58.0.4",
+    "eslint-config-prettier": "10.1.8",
     "json-schema-to-typescript": "^15.0.0",
+    "prettier": "3.9.10",
     "typescript": "~6.0.3"
   }
 }

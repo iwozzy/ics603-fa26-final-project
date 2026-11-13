@@ -1,5 +1,6 @@
 const { defineConfig } = require('eslint/config');
 const expoConfig = require('eslint-config-expo/flat');
+const prettierConfig = require('eslint-config-prettier/flat');
 
 module.exports = defineConfig([
   expoConfig,
@@ -18,4 +19,5 @@ module.exports = defineConfig([
       'src/api.generated.ts',
     ],
   },
+  prettierConfig,
 ]);

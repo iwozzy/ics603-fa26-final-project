@@ -16,7 +16,12 @@ export interface SearchState {
 
 /** A mounted screen owns one workflow; submission alone supersedes pending work. */
 export function createSearchWorkflow(backend: PeopleSearch) {
-  let state: SearchState = { draft: '', submitted: null, loading: false, results: [] };
+  let state: SearchState = {
+    draft: '',
+    submitted: null,
+    loading: false,
+    results: [],
+  };
   let generation = 0;
   let active: SearchRequest | undefined;
   let disposed = false;
@@ -24,15 +29,19 @@ export function createSearchWorkflow(backend: PeopleSearch) {
   const update = (next: SearchState) => {
     if (disposed) return;
     state = next;
-    listeners.forEach(listener => listener());
+    listeners.forEach((listener) => listener());
   };
   return {
     snapshot: () => state,
     subscribe(listener: () => void) {
       listeners.add(listener);
-      return () => { listeners.delete(listener); };
+      return () => {
+        listeners.delete(listener);
+      };
     },
-    edit(draft: string) { update({ ...state, draft }); },
+    edit(draft: string) {
+      update({ ...state, draft });
+    },
     submit(draft = state.draft) {
       const name = draft.trim();
       if (!name || disposed) return;
@@ -41,11 +50,13 @@ export function createSearchWorkflow(backend: PeopleSearch) {
       update({ ...state, draft, submitted: name, loading: true, results: [] });
       active = backend.start(name);
       active.result.then(
-        results => {
-          if (generation === current) update({ ...state, results, loading: false });
+        (results) => {
+          if (generation === current)
+            update({ ...state, results, loading: false });
         },
         () => {
-          if (generation === current) update({ ...state, results: [], loading: false });
+          if (generation === current)
+            update({ ...state, results: [], loading: false });
         },
       );
     },

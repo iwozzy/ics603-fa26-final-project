@@ -8,7 +8,8 @@ export default defineConfig({
   use: { baseURL: 'http://127.0.0.1:8765', trace: 'retain-on-failure' },
   projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
   webServer: {
-    command: 'uv run uvicorn server:app --app-dir tests/support --host 127.0.0.1 --port 8765 --no-access-log',
+    command:
+      'uv run uvicorn server:app --app-dir tests/support --host 127.0.0.1 --port 8765 --no-access-log',
     cwd: '../backend',
     env: { PYTHONPATH: '.' },
     url: 'http://127.0.0.1:8765',

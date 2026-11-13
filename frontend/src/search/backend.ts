@@ -11,15 +11,22 @@ export const httpPeopleSearch: PeopleSearch = {
     const deadline = setTimeout(() => controller.abort(), 8000);
     const result = (async () => {
       try {
-        const response = await fetch(`/api/people/search?query=${encodeURIComponent(name)}`, {
-          signal: controller.signal,
-          // Keep default browser HTTP caching; no application query cache.
-        });
+        const response = await fetch(
+          `/api/people/search?query=${encodeURIComponent(name)}`,
+          {
+            signal: controller.signal,
+            // Keep default browser HTTP caching; no application query cache.
+          },
+        );
         if (!response.ok) throw new Error('Search unavailable');
         const body: unknown = await response.json();
         if (!validate(body)) throw new Error('Invalid search response');
-        const ids = body.results.map(row => `${row.provider_ref.provider}/${row.provider_ref.entity_type}/${row.provider_ref.id}`);
-        if (new Set(ids).size !== ids.length) throw new Error('Invalid search response');
+        const ids = body.results.map(
+          (row) =>
+            `${row.provider_ref.provider}/${row.provider_ref.entity_type}/${row.provider_ref.id}`,
+        );
+        if (new Set(ids).size !== ids.length)
+          throw new Error('Invalid search response');
         return body.results;
       } finally {
         clearTimeout(deadline);
