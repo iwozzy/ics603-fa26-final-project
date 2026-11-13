@@ -16,7 +16,7 @@ Baseline: 00ab21a0a3ba6230ea0b97faa22aa895ddd052f8
 
 ## Agreed verification
 
-The spec's Testing Decisions already confirm the web/public API seams. Use red → green vertical slices; run individual test files and typechecks as slices land, then the full suite. Verify real TMDB, the requested portrait transform, and actual browser HTTP caching separately. Record evidence below. Review against the pinned baseline and spec before committing to the existing branch.
+The spec's Testing Decisions already confirm the web/public API seams. Use red → green vertical slices; run individual test files and typechecks as slices land, then the full suite. Verify provider translation and portrait handling with controlled responses and browser HTTP caching against the local API. Do not run tests against live provider APIs or image servers unless explicitly requested. Record evidence below. Review against the pinned baseline and spec before committing to the existing branch.
 
 ## Evidence
 
@@ -54,3 +54,9 @@ Approved scope: centralize concrete adapter selection in startup, move provider-
 - Full verification: 27 API + 27 browser tests passed; backend branch coverage is enabled and combined coverage is 85%. The search application module reports 100% coverage with branch tracking. Both typechecks, Ruff lint/format, ESLint, and Prettier checks passed. Contract regeneration produced no diff.
 - Real-TMDB smoke passed through the new composition: one provider attempt and one result, the requested 180×180 portrait, browser cache reuse, and content-free runtime output. Public API fields, headers, and UI behavior remain as specified.
 - [Two-axis review](architecture-review.md) complete: Standards 0 findings; Spec 0 findings. No unresolved issues.
+
+## Current provider-test policy
+
+Live-provider verification is deferred at the user's request. The `smoke:live` command and its script have been removed. Current API and browser tests use controlled provider responses and intercepted image requests without real provider credentials. Earlier live smoke results in this file and review reports are historical, not instructions to repeat those checks. Any further live-provider test run requires an explicit request.
+
+Verification of this policy update: all 27 API and 27 browser tests passed with `TMDB_API_READ_ACCESS_TOKEN` unset and automatic environment-file loading disabled. Backend branch coverage remained enabled; frontend formatting, lint, and typechecking passed. No live-provider check was run.

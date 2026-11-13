@@ -66,7 +66,7 @@ Include disabled Movies and Follow placeholders. Search remains transient: it cr
 44. As a maintainer, I want one bounded provider attempt per backend search, so that automatic retries do not multiply request time or usage.
 45. As a maintainer, I want internal timing, outcome, and usage visibility without searched names or returned content, so that silent client failures remain diagnosable without retaining feature data.
 46. As a maintainer, I want provider credentials kept server-side, so that the browser can search without holding a TMDB secret.
-47. As a maintainer, I want reproducible local startup and behavioral verification with real-TMDB smoke evidence, so that the first feature can be run and reviewed before public delivery.
+47. As a maintainer, I want reproducible local startup and behavioral verification with controlled provider responses, so that the feature can be verified without contacting provider servers or requiring real credentials.
 
 ## Implementation Decisions
 
@@ -106,7 +106,7 @@ Include disabled Movies and Follow placeholders. Search remains transient: it cr
 - **Cache behavior:** Inspect exact success and failure cache headers, including successful empty lists and admission failures. Check browser fetch permits normal caching. In a browser that stores a fresh success response, demonstrate repeat-request reuse; absence of browser storage is not itself a product failure. Do not substitute an application query cache for HTTP-cache verification.
 - **Presentation and accessibility:** Check initial/loading/results hierarchy at wide and narrow sizes, keyboard submission and whole-search-box focus (including pointer focus, moving focus to the search button, blur, and narrow layouts), disabled Movies/Follow behavior, hover/focus reveal, touch toggle/move/reset, portrait fallback, and optional text omission. Test disabled actions through observable absence of navigation or saved activity.
 - **Operational behavior:** Verify configured bounds and admission stop work without automatic retries or feature-data writes. Capture operational output/settings sufficiently to establish that searched names, returned person content, and credentials are not logged while timing/outcome/usage evidence remains available. Durable accounting/public transport/recovery verification belongs to the public-release prerequisite rather than the local feature test suite.
-- **Real integration evidence:** After deterministic verification, perform a minimal configured real-TMDB smoke search and portrait-transform check, plus actual browser cache/header checks. Document the commands and evidence. Credentials are runtime configuration; do not claim a live-provider check or image compatibility from fixture-only tests. No runtime verification is claimed by this specification publication.
+- **Provider isolation:** Run tests only with mocked or local provider responses, including image requests. Do not execute tests against live provider APIs or image servers. No real provider credentials are required for tests. Verify browser caching and headers against the local application API. Live-provider verification is deferred until explicitly requested; controlled responses do not establish current live-provider availability or image compatibility. Earlier live-check evidence is historical.
 
 ## Out of Scope
 
@@ -132,14 +132,14 @@ Authoritative local references:
 - [Domain glossary](../../GLOSSARY.md)
 - [ADR-0001: application architecture and Search people exceptions](../../docs/adr/0001-app-architecture.md)
 
-The supplied sample demonstrates nullable portraits and both movie and TV recognition objects. It does not guarantee every person has three usable recognition titles or establish all nullable/missing field cases. The selected portrait transform still needs actual integration evidence; retain the user's base unless a failing check requires a follow-up decision.
+The supplied sample demonstrates nullable portraits and both movie and TV recognition objects. It does not guarantee every person has three usable recognition titles or establish all nullable/missing field cases. Retain the selected portrait transform. Automated verification uses controlled responses; any further live-provider or portrait-server checks require an explicit request.
 
 The accepted implementation sequence remains:
 
 1. Settle minimum implementation tools, contracts, local configuration, and numeric runtime bounds.
 2. Implement the transient backend API and provider adaptation.
 3. Implement the search screen and client workflow; this can proceed alongside the backend once the contract/tools are settled.
-4. Integrate and verify the locally runnable real-TMDB feature, including reproducible startup instructions.
+4. Integrate the locally runnable feature and verify it with controlled provider responses, including reproducible startup instructions.
 5. Resolve and verify the separate operational gate before public exposure.
 
 Later requirements to Follow/save people trigger persistence and app-owned identity planning. Requests for typing search, broader results, differentiated failure recovery, or native delivery trigger their respective feature decisions. None is silently included here.
@@ -169,3 +169,7 @@ The user refined the focus treatment to emphasize the existing search-box border
 ### Ports and adapters refinement — 2026-11-12 (Pacific/Honolulu)
 
 The user approved tightening startup composition and application-policy ownership, separating the frontend workflow from generated API response types, and selecting its HTTP adapter at startup. This is an implementation refactor of the accepted architecture. Preserve the current public API, search behavior, admission/timeout bounds, cache headers, and operational logging. Continue testing through the existing public API and rendered web workflow; the public API also verifies that a supplied search capability and a replacement provider adapter work with the shared selection policy.
+
+### Provider testing deferred — 2026-11-12 (Pacific/Honolulu)
+
+The user instructed that no tests currently need to run live against any provider servers. All current verification uses mocked or local provider responses, including portrait-image scenarios, without real credentials. The live smoke script and command are removed. This supersedes the earlier automatic live-provider verification requirement. Prior live-check results remain historical records; further live-provider testing requires an explicit request. The application still uses its configured real provider during ordinary manual use.

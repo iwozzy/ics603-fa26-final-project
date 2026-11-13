@@ -16,7 +16,6 @@ backend/
 frontend/
   src/                    Expo entry point, search screen, workflow, and API contract
   tests/e2e/              Playwright browser tests
-  scripts/                Live integration smoke check
   package.json            Frontend commands and dependencies
   package-lock.json
   app.json
@@ -92,14 +91,7 @@ npm --prefix frontend run contract
 
 The Python exporter in `backend/scripts/` writes `frontend/src/api.schema.json`; frontend tooling derives `frontend/src/api.generated.ts`. The frontend validates JSON at runtime with that same schema. Contract files are checked in; no generation step is needed to start the app.
 
-With the token configured, this opt-in command performs one real TMDB search through the rendered screen, verifies a portrait decodes at the requested 180×180 transform, confirms browser HTTP-cache reuse, and checks actual runtime output excludes query/content/credentials:
-
-```sh
-npm --prefix frontend run build:web
-npm --prefix frontend run smoke:live
-```
-
-To load the backend `.env` for the live check, use `uv run --directory backend --env-file .env node ../frontend/scripts/smoke-live.mjs`. It binds port 8767 and prints only counts and operational evidence. Deterministic tests use port 8765. See [implementation evidence](.scratch/search-people/implementation.md).
+All tests use mocked or local provider responses, including portrait-image scenarios. Tests do not contact live provider APIs or image servers and do not require provider credentials. The browser test server binds port 8765. Live-provider testing is deferred until explicitly requested. Earlier live checks recorded in the [implementation evidence](.scratch/search-people/implementation.md) are historical.
 
 ## Boundaries and local settings
 
