@@ -2,8 +2,10 @@
 __pycache__/
 
 # Virtual environments
-.venv
+.venv/
 
-#
-**/.env
-**/.DS_Store
+# Environment and OS files
+.env
+.env.*
+!.env.example
+.DS_Store
