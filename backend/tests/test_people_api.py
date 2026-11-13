@@ -1,8 +1,8 @@
 import httpx
 import pytest
 
-from wayfinder.api import create_api
-from wayfinder.config import Settings
+from lumiere.api import create_api
+from lumiere.config import Settings
 
 
 @pytest.mark.asyncio
@@ -239,7 +239,7 @@ async def test_total_provider_deadline_is_bounded_and_logs_exclude_content(caplo
     import asyncio
     import logging
 
-    caplog.set_level(logging.INFO, logger="wayfinder.operations")
+    caplog.set_level(logging.INFO, logger="lumiere.operations")
 
     async def tmdb(request):
         await asyncio.sleep(0.2)

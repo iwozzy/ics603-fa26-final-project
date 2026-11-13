@@ -1,5 +1,5 @@
 [project]
-name = "ics603-fa26-final-project"
+name = "lumiere-backend"
 version = "0.1.0"
 description = "A web app that helps people discover movies from their favorite actors, directors and creative team."
 requires-python = ">=3.13"

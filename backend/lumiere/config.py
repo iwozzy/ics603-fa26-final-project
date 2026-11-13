@@ -39,6 +39,6 @@ class Settings:
             else:
                 default = getattr(defaults, field.name)
                 values[field.name] = type(default)(
-                    os.getenv(f"WAYFINDER_{field.name.upper()}", str(default))
+                    os.getenv(f"LUMIERE_{field.name.upper()}", str(default))
                 )
         return cls(**values)

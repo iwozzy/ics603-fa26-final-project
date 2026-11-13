@@ -36,3 +36,9 @@ The application files now live in `backend/` and `frontend/`. Python configurati
 Current commands are documented in [README](../../README.md). From the repository root, use `uv run --directory backend pytest tests` for API tests and `npm --prefix frontend test` for the frontend build/browser tests. Generate contracts with `npm --prefix frontend run contract`.
 
 Verification after relocation: all 25 API + 23 browser tests passed; TypeScript/Python typechecks, Ruff lint, and formatting checks passed. Both dependency lockfiles and generated API contract files retained identical contents. The relocated live smoke check passed: one provider attempt, one result, 180×180 portrait, browser cache reuse (`[594, 0]` transfer bytes), and content-free runtime logs. Paths and commands quoted in the original implementation review describe the pre-reorganization commit.
+
+## Application name correction
+
+The product is **Lumiere**. App display metadata and the frontend npm package now use `Lumiere` / `lumiere`. The backend Python package is `backend/lumiere/`, its project metadata is `lumiere-backend`, and logging uses `lumiere.operations`. Numeric configuration keys now use `LUMIERE_<SETTING>`; README commands and the server configuration template match. Existing planning-skill identifiers and quoted historical review details retain their original names.
+
+Verification: all 25 API + 23 browser cases, typechecks, lint, and formatting checks passed. The generated web document title is `Lumiere`, configuration reads the new environment prefix, and contract generation is unchanged. The renamed runtime passed the live search/portrait/cache/log smoke check. Dependency versions and artifacts are unchanged.

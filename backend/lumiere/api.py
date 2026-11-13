@@ -13,11 +13,11 @@ from .schemas import SearchResponse
 from .search import SearchUnavailable, search_people
 from .tmdb import TmdbPeople
 
-logger = logging.getLogger("wayfinder.operations")
+logger = logging.getLogger("lumiere.operations")
 
 
 def create_api(settings: Settings, client: httpx.AsyncClient) -> FastAPI:
-    app = FastAPI(docs_url=None, redoc_url=None, openapi_url=None)
+    app = FastAPI(title="Lumiere", docs_url=None, redoc_url=None, openapi_url=None)
     incoming = LocalAdmission(
         settings.incoming_concurrency,
         settings.admissions_per_minute,

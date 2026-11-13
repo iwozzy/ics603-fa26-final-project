@@ -5,7 +5,7 @@ import sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-from wayfinder.schemas import SearchResponse
+from lumiere.schemas import SearchResponse
 
 schema = Path(__file__).resolve().parents[2] / "frontend" / "src" / "api.schema.json"
 schema.write_text(json.dumps(SearchResponse.model_json_schema(), indent=2) + "\n")

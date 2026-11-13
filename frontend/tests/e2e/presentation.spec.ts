@@ -38,7 +38,7 @@ test('portraits fall back, missing secondary text has no separators, and keyboar
   await page.keyboard.press('Enter');
   expect(new URL(page.url()).pathname).toBe('/');
   await expect(rows).toHaveCount(4);
-  await page.screenshot({ path: '/private/tmp/wayfinder-results-wide.png' });
+  await page.screenshot({ path: '/private/tmp/lumiere-results-wide.png' });
 });
 
 test('touch reveal toggles, moves, and resets at a narrow viewport', async ({ browser, request }) => {
@@ -46,7 +46,7 @@ test('touch reveal toggles, moves, and resets at a narrow viewport', async ({ br
   const page = await context.newPage();
   await page.route('https://image.tmdb.org/**', route => route.fulfill({ status: 404, body: '' }));
   await page.goto('/');
-  await page.screenshot({ path: '/private/tmp/wayfinder-initial-narrow.png' });
+  await page.screenshot({ path: '/private/tmp/lumiere-initial-narrow.png' });
   await submit(page);
   const rows = page.getByTestId('person-row');
   const follow = (index: number) => rows.nth(index).getByTestId('follow-container');
@@ -61,7 +61,7 @@ test('touch reveal toggles, moves, and resets at a narrow viewport', async ({ br
   await expect(follow(1)).toHaveCSS('opacity', '1');
   await expect(rows.nth(1).getByRole('button')).toBeDisabled();
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
-  await page.screenshot({ path: '/private/tmp/wayfinder-results-narrow.png' });
+  await page.screenshot({ path: '/private/tmp/lumiere-results-narrow.png' });
   await page.getByRole('textbox').fill('Refresh');
   await page.getByRole('textbox').press('Enter');
   await expect(rows).toHaveCount(1);

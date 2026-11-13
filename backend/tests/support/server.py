@@ -10,9 +10,9 @@ from fastapi import Request
 from fastapi.responses import Response
 from fastapi.staticfiles import StaticFiles
 
-from wayfinder.api import create_api
-from wayfinder.config import Settings
-from wayfinder.runtime import configure_logging
+from lumiere.api import create_api
+from lumiere.config import Settings
+from lumiere.runtime import configure_logging
 
 configure_logging()
 scenarios = {}

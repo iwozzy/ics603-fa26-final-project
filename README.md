@@ -1,4 +1,4 @@
-# Wayfinder
+# Lumiere
 
 Search actors, directors, and other cast and crew by name. This first increment runs locally with an Expo / React Native for Web frontend and async Python backend. Search data stays transient; Movies and Follow are disabled placeholders.
 
@@ -6,7 +6,7 @@ Search actors, directors, and other cast and crew by name. This first increment 
 
 ```text
 backend/
-  wayfinder/              Python API, application logic, and TMDB adapter
+  lumiere/                Python API, application logic, and TMDB adapter
   tests/                  API tests and controlled provider server for browser tests
   scripts/                API contract export
   pyproject.toml          Python dependencies and tool configuration
@@ -42,7 +42,7 @@ Set the server-only token in your shell:
 ```sh
 export TMDB_API_READ_ACCESS_TOKEN='your TMDB read access token'
 npm --prefix frontend run build:web
-uv run --directory backend uvicorn wayfinder.runtime:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
+uv run --directory backend uvicorn lumiere.runtime:create_app --factory --host 127.0.0.1 --port 8000 --no-access-log
 ```
 
 Alternatively, copy `backend/.env.example` to `backend/.env`, fill it in, and add `--env-file .env` after `uv run --directory backend` when starting the API. `.env` is ignored by Git. Never use an `EXPO_PUBLIC_` variable for provider credentials.
@@ -57,8 +57,8 @@ Install Chromium once with `(cd frontend && npx playwright install chromium)`, t
 
 ```sh
 npm --prefix frontend run typecheck
-uv run --directory backend ty check wayfinder scripts tests
-uv run --directory backend ruff check wayfinder scripts tests
+uv run --directory backend ty check lumiere scripts tests
+uv run --directory backend ruff check lumiere scripts tests
 uv run --directory backend pytest tests
 npm --prefix frontend test
 ```
@@ -67,7 +67,7 @@ The backend command runs the direct API tests. The frontend test command exports
 
 Run an individual API file with `uv run --directory backend pytest tests/test_people_api.py`. Within `frontend/`, after exporting, use `npx playwright test tests/e2e/search.spec.ts` or `tests/e2e/presentation.spec.ts`.
 
-Regenerate the JSON Schema and TypeScript API types after editing `backend/wayfinder/schemas.py`:
+Regenerate the JSON Schema and TypeScript API types after editing `backend/lumiere/schemas.py`:
 
 ```sh
 npm --prefix frontend run contract
@@ -90,7 +90,7 @@ To load the backend `.env` for the live check, use `uv run --directory backend -
 
 The API accepts `GET /api/people/search?query=...`. Success contains only `results`, with up to seven distinct usable page-one people in provider order. It permits `private, max-age=60` browser caching. Blank/oversized input, admission refusal, and upstream errors return status 500 with an empty body and `no-store`. No automatic retries or application query cache are used.
 
-All numeric settings below are positive and configurable through `WAYFINDER_<SETTING>` environment variables. Invalid configuration stops startup. Changing settings requires a restart.
+All numeric settings below are positive and configurable through `LUMIERE_<SETTING>` environment variables. Invalid configuration stops startup. Changing settings requires a restart.
 
 | Setting | Default | Meaning |
 | --- | --- | --- |
