@@ -79,8 +79,10 @@ Run an individual API file with `uv run --directory backend pytest tests/test_pe
 Backend coverage is available through pytest-cov:
 
 ```sh
-uv run --directory backend pytest tests --cov=lumiere --cov-report=term-missing
+uv run --directory backend pytest tests --cov=lumiere --cov-branch --cov-report=term-missing
 ```
+
+Branch coverage is enabled by default in the pytest configuration.
 
 Regenerate the JSON Schema and TypeScript API types after editing `backend/lumiere/schemas.py`:
 
