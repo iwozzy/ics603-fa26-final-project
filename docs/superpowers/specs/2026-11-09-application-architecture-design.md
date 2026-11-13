@@ -10,6 +10,8 @@ Amendment agreed on 2026-11-13 during F001 planning: deliver people search first
 
 Additional F001 revisions agreed on 2026-11-13: people-search candidates remain transient, with provider-to-app ID mappings created only on explicit following in the next feature. All search API failures use HTTP `500`; clients silently show a blank results area for failures and successful empty results, without hint messages. Known-for recognition titles may include TV as well as movies. The TMDB adapter sends only the required query, allowing provider defaults, and constructs profile URLs with `https://image.tmdb.org/t/p/w180_and_h180_face/`. Successful search responses omit `Vary: Cookie`. These F001 exceptions take precedence over the general identity, movie-only, and typed HTTP-error directions below; app-owned identities and other feature policies still apply when catalog entities are retained in later features.
 
+F001 clarification agreed on 2026-11-13: omit IDs from the search response and decide how to capture user selection when designing following. Preserve the initial example-search guidance from the supplied wireframes; the restriction on hint messages concerns additional messages beyond those wireframes, including messages for empty results and failures.
+
 ## Intent and document authority
 
 The application helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.

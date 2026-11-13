@@ -22,7 +22,8 @@ The repository currently contains the approved architecture, wireframes, sample 
 - Construct profile image URLs using the fixed base `https://image.tmdb.org/t/p/w180_and_h180_face/` and the returned `profile_path`.
 - Send only the required search query to TMDB; omit optional parameters so the provider applies its defaults.
 - Retain no provider-to-app ID mappings during search. Create those mappings when someone explicitly follows a person in the next feature.
-- Include no hint messages at this time.
+- Omit IDs from the search response. Decide how to capture user selection when designing the following feature.
+- Show the initial example-search guidance as supplied in the wireframes. Include no additional hint messages beyond those already shown there.
 - Design and implement following separately after search.
 
 ### Goals and exclusions
@@ -57,9 +58,14 @@ Text sketch:
 ```text
 Initial:  Cast & Crew
           [Search for actors, directors, or creative team   (Search)]
+          Example searches:
+          Timothée Chalamet (Actor)
+          Hayao Miyazaki (Director, Writer)
+          Autumn Durald Arkapaw (Cinematographer)
 
 Loading:  Cast & Crew
           [Matthew                                       (Spinner)]
+          (Same example-search guidance as the initial state.)
 
 Results:  Cast & Crew
           [Matthew                                        (Search)]
@@ -71,16 +77,18 @@ Empty:    (Blank results area; input remains visible.)
 Failure:  (Blank results area; input remains visible; spinner stops.)
 ```
 
+The example-search guidance remains visible in the initial and loading states as shown in the wireframes. After a search completes, show the results or leave the results area blank; do not replace empty results or failures with guidance. Example names and role descriptions are illustrative text, not interactive search controls in this increment (an author proposal).
+
 The following details are **author proposals**, rather than additional owner decisions:
 
 - Trim surrounding query whitespace on client and server. Accept 1–200 Unicode code points after trimming. Blank or overlong client submissions clear the results without a request or validation message. Invalid requests reaching the API fail with `500` and no provider call. Preserve internal whitespace, case, accents, and punctuation. This is an application limit, not a claim about TMDB.
-- Omit example-search guidance and refine-query suggestions to honor the no-hint-messages requirement. Keep the search-field placeholder from the wireframe.
+- Keep the search-field placeholder and agreed example-search guidance from the wireframes. Add no refine-query suggestions or other hint messages.
 - Keep draft and submitted queries separately. Editing leaves the last completed result visible. Submitting clears the previous list and shows the spinner. Clearing the input returns to the initial state and invalidates in-flight results. Track the submitted query internally without adding a screen message.
 - Ignore duplicate submissions of the same trimmed query while in flight. Allow submitting another query; cancel the prior client request when possible and accept results only from the latest submission. Cancellation does not undo a dispatched provider call or its accounting.
 - During loading, the input stays editable. Enter/Return can submit the edited query; the icon shows progress for the pending submission and becomes an enabled search action when the draft differs. Do not submit during input-method composition.
 - Display a name, profile image or silhouette, optional department, and up to three nonblank known-for titles in provider order. Read movie titles from `title` and TV titles from `name`; do not exclude TV or retrieve extra credits.
 - Omit missing/blank department or titles without dangling separators or invented metadata. Failed image loads use the missing-image silhouette. Result rows are informational in F001.
-- Show no pagination, Load more, provider total count, exhaustive-match claim, hints, no-results messages, or error messages.
+- Show no pagination, Load more, provider total count, exhaustive-match claim, additional hints, no-results messages, or error messages. Preserve the agreed example-search guidance in the initial and loading states.
 - Use accessible input/button names, visible keyboard focus, and a loading/busy state. End the busy state on success or failure without announcing an error or no-results message. Provide a usable touch target and preserve input focus after submission.
 
 An empty provider page, or one whose individual records are all unusable, is a successful empty result. A malformed top-level response is a provider failure. Both yield a blank UI, but their HTTP status and server diagnostics differ.
@@ -109,7 +117,7 @@ Successful response shape:
 
 `department` and `profile_image_url` are nullable. `known_for` contains zero to three nonblank movie/TV title strings in provider order. `people` contains zero to seven items; `query` is the submitted trimmed query.
 
-**Author proposal for this search-only contract:** the response is display-only, with no provider IDs or invented app UUIDs. Validate source IDs internally for eligibility, then discard them after response construction. Following will define its selection-reference contract and create mappings in its own design. Do not implement that future contract now. Do not expose source payloads, pagination metadata, popularity scores, or followed state.
+**Agreed search-only contract:** the response is display-only, with no IDs. Validate source IDs internally for eligibility, then discard them after response construction. Decide how to capture user selection and create mappings when designing the following feature. Do not implement that future contract now. Do not expose source payloads, pagination metadata, popularity scores, or followed state.
 
 The search operation has two response statuses: `200` for success, including an empty list, and `500` for every failure. Failures include invalid/missing query, missing/expired guest context, throttling/quota rejection, provider errors or invalid payloads, deadline expiry, and unavailable accounting/persistence. Override FastAPI's default validation/error mappings for this operation so they do not return other error statuses. Keep internal failure categories for server telemetry and accounting; expose no provider errors or retry/reset guidance. Proposed failure representation: an empty response body with `Cache-Control: no-store`.
 
@@ -173,7 +181,7 @@ Use the captured [TMDB fixture](../../samples/api/tmdb/v3/search/person.json) an
 - Each admitted network search makes one provider request with only `query` and the authorization header. Assert omitted optional parameters, no additional-page/configuration/detail request, no result-cache access, and no search-content persistence. A repeated network request dispatches again.
 - Verify exact successful `Cache-Control` and absence of `Vary: Cookie`, including empty results, through middleware/ingress. Errors are not cacheable. A browser test with caching enabled demonstrates that a repeated identical fresh request can avoid API/provider calls. Verify dispatch after expiry using deterministic browser-cache tooling or an opt-in longer check; API-only clients do not prove browser caching.
 - Repeated/concurrent searches create no catalog people, app UUIDs, or provider-to-app mappings. Verify durable admission caps and restart continuity, including no dispatch when accounting is unavailable.
-- Every search failure category returns `500`, including validation failures normally assigned another status by FastAPI. A successful empty result returns `200` with `people: []`. Both leave the results area blank; network errors and malformed client responses do too. Assert no error, empty-state, validation, retry, refine-query, or other hint messages, and that loading stops.
+- Every search failure category returns `500`, including validation failures normally assigned another status by FastAPI. A successful empty result returns `200` with `people: []`. Both leave the results area blank; network errors and malformed client responses do too. Assert no error, empty-state, validation, retry, refine-query, or other additional hint messages, and that loading stops. Separately verify that the wireframe's example-search guidance appears in the initial and loading states.
 - Exercise keyboard/pointer submission, no keystroke search, fallback images/text, and at most seven informational rows. Verify the exact `w180_and_h180_face` image base and a single joining slash.
 - Delay/reorder responses so older submissions cannot overwrite newer results or repopulate cleared input. Double-submit an identical in-flight query and assert no duplicate client dispatch.
 - Run appropriate backend unit/adapter checks, client interaction checks, API/runtime validation, dependency-boundary checks, lint/type checks, and the focused web end-to-end flow. Avoid tests that merely mirror trivial implementation details.
