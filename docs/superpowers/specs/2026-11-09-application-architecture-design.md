@@ -6,6 +6,8 @@ Status: Approved by the project owner on 2026-11-09
 
 Scope: Starting architecture for the whole application; individual features will be designed separately.
 
+Amendment agreed on 2026-11-13 during F001 planning: deliver people search first and design following as the next feature. Do not cache people-search results on the server at this time; successful search responses use `Cache-Control: private, max-age=300` to permit browser caching. The [F001 design draft](2026-11-13-F001-search-people-design.md) records the feature details and proposals still awaiting approval. These two agreed changes supersede the original first-increment grouping and people-search-cache direction below.
+
 ## Intent and document authority
 
 The application helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
@@ -169,7 +171,7 @@ Do not merge people or movies solely by display name/title. Cross-provider recon
 
 Use suitable previously retrieved data before making provider calls. Read available local catalog data while arranging due refreshes in the background. Missing information can trigger an on-demand lookup or hydration, depending on the use case. Preserve useful stale data during refresh failures and expose incomplete hydration distinctly from a genuine empty filmography.
 
-An entity table alone is not a complete search index of an external provider. Cache reusable search results with their query, page, language/region, provider, and fetch time where relevant; on a cache miss, search the provider and retain normalized results. Do not claim a local subset represents every matching person/movie. Search cache sizing and retention are feature-level policies.
+An entity table alone is not a complete search index of an external provider. Cache reusable search results with their query, page, language/region, provider, and fetch time where relevant; on a cache miss, search the provider and retain normalized results. **People-search exception agreed on 2026-11-13:** no server-side people-search-result caching at this time; a search reaching provider dispatch fetches page one, and successful API responses carry `Cache-Control: private, max-age=300` for browser caching. Do not introduce search-result retention or background search refresh for F001. Do not claim a local subset represents every matching person/movie. Search cache sizing and retention for other features remain feature-level policies.
 
 ### Freshness
 
@@ -278,7 +280,7 @@ Architecture verification should include:
 
 These are future verification requirements, not claims that implementation or tests exist now.
 
-The first feature session should design people search and following against this baseline. It should identify the minimum catalog and identity capabilities required and decide whether initial filmography hydration/timeline display is delivered alongside following or in the next increment. Username/password authentication, AI imports, suggestions, semantic search, and full native delivery are not silently added to the first increment by this document.
+The original first increment grouped people search and following. **Updated on 2026-11-13:** F001 designs working people search, and following is the next feature with its own design. Identify the minimum catalog and identity capabilities required for search; decide filmography hydration/timeline delivery during the following feature design. Username/password authentication, AI imports, suggestions, semantic search, and full native delivery are not silently added to the first increment by this document.
 
 ## Deliberately deferred decisions
 
