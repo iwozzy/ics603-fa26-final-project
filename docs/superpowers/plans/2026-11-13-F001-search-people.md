@@ -2,153 +2,166 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver working people search from the supplied wireframes, returning the first seven valid people from TMDB's default first page in provider order.
+**Goal:** Deliver the approved people-search feature: up to seven valid people from the provider's default first page, in provider order, through the wireframed Expo interface.
 
-**Architecture:** An Expo client calls a same-origin FastAPI API. Backend and client use cases depend on owned ports; TMDB, HTTP, session storage, and usage accounting are adapters. Only guest/session and usage state is persisted; search data and catalog identities remain transient.
+**Architecture:** A monorepo contains independent backend, frontend, and browser-test projects. Both application sides use domain → application → adapters → bootstrap layers with dependencies pointing inward. Root `openapi.json` is the sole backend/frontend contract; only guest/session and usage state is persisted.
 
-**Tech Stack:** Python 3.13+/uv, FastAPI/Pydantic, HTTPX, async SQLAlchemy/psycopg/Alembic, Postgres/Neon, Logfire; TypeScript, Expo/React Native/web/Router, npm, Jest/jest-expo, React Native Testing Library, Zod, Hey API code generation, Playwright, Docker/Caddy.
+**Tech Stack:** Python 3.13+/uv, FastAPI/Pydantic, HTTPX, async SQLAlchemy/psycopg/Alembic, Postgres/Neon, Logfire, import-linter; TypeScript, Expo/React Native/web/Router, npm, Jest/jest-expo/RNTL, Zod/Hey API, eslint-plugin-boundaries; separate Playwright package, Docker/Caddy, Make.
 
-**Spec:** [Approved F001 design](../specs/2026-11-13-F001-search-people-design.md), read with the [amended application architecture](../specs/2026-11-09-application-architecture-design.md).
+**Spec:** [Approved F001 design](../specs/2026-11-13-F001-search-people-design.md), [amended architecture](../specs/2026-11-09-application-architecture-design.md), and [repository structure guide](../../samples/architecture-and-repo-structure-guide.md). Revised to incorporate the guide at the owner's request. Feature-specific agreed behavior takes precedence over the guide's general examples.
 
 ## Global Constraints
 
-- Python 3.13+; preserve existing uv, Ruff, Pyrefly, and coverage configuration. Keep dependency resolution's existing `exclude-newer = "3 days"` policy.
+- Python 3.13+; preserve `backend/pyproject.toml`, `backend/.python-version`, existing Ruff/Pyrefly/coverage configuration, and uv's `exclude-newer = "3 days"` policy. The owner has already moved Python tooling into `backend/`; do not recreate a root Python project.
 - Submit on Enter/Return or clicking/tapping the search icon. Typing does not initiate search.
 - Use only the provider's first page; return up to the first seven valid people in provider order. No sorting, deduplication, or additional-page requests.
 - A valid person has a usable provider ID and a nonblank name. Optional display omissions never exclude a person.
 - Send only TMDB's required `query` parameter; omit optional parameters. Authentication uses the authorization header.
-- All search API failures return HTTP `500`; a successful empty list returns `200`. Both display a blank results area without an added message.
+- All search API failures return HTTP `500`; successful empty results return `200`. Both leave a blank results area without an added message.
 - Every successful search response has exactly `Cache-Control: private, max-age=300`. Omit `Vary: Cookie`; errors use `Cache-Control: no-store`.
-- Preserve the wireframe's initial/loading example-search guidance; add no other hint messages.
-- Display up to three provider-ordered known-for titles, including TV. Use `https://image.tmdb.org/t/p/w180_and_h180_face/` plus `profile_path`, with one joining slash.
-- Omit IDs from the response. Store no people, source mappings, provider payloads, queries, or search results. Selection capture and identity mappings belong to the following feature.
-- Retain ports/adapters in backend and client; keep framework/provider/storage dependencies outside cores. No future-feature scaffolding, workers, AI, registration, or native release work.
-- Enforce durable global/session/IP admission and provider budgets; count dispatched failures conservatively. No hidden provider retry layers.
-- Follow AGENTS.md: do not inspect or write operator secrets, print them, or commit them. Runtime access is operator-supplied. Test values are synthetic and isolated; never load existing credential files.
+- Preserve initial/loading example-search guidance from the wireframes; add no additional hint messages.
+- Display up to three known-for titles in provider order, including TV. Construct image URLs with `https://image.tmdb.org/t/p/w180_and_h180_face/` and `profile_path`, with one joining slash.
+- Omit IDs from responses. Retain no people, provider mappings, queries, provider payloads, or result lists. Selection capture and person identity mapping belong to following.
+- Domain and application are framework-free. Backend cores import no FastAPI, Pydantic, HTTPX, SQLAlchemy, or Logfire; frontend cores import no React, React Native, Expo, fetch, or generated transport code.
+- Application use cases own transaction boundaries through an owned UnitOfWork protocol. Repositories flush/query but never commit; no database transaction spans a provider call.
+- Separate npm packages in `frontend/` and `e2e/`, without npm workspaces or a root package.json. Browser tests never import frontend or backend internals.
+- Enforce durable global/session/IP admission and provider budgets; conservatively count dispatched failures. No hidden provider retries.
+- Follow AGENTS.md: never inspect, write, print, or commit operator secrets. Runtime access is operator-supplied; test values are synthetic and isolated. Never load existing credential files.
+- No future-feature scaffolding, search cache port, workers, AI, registration, native release, SSE, or job framework in F001.
 
 ## Review Focus
 
-1. Non-BMP names, accents, apostrophes, and boundary-length input: encode once, preserve text, and count Unicode code points consistently (Tasks 1, 5, 6).
-2. Heterogeneous provider records and broken optional values: skip only unusable IDs/names and preserve usable people and movie/TV order (Task 2).
-3. Clearing/editing during overlapping requests, including old failures: only the latest submission can change current results or loading (Task 6).
-4. Concurrent admission, crashes, and UTC rollover: durable limits cannot overspend or reset cumulative usage after restart (Task 3).
-5. Browser caching obscured by mocks, cookie changes, or forced revalidation: prove real HTTP-cache reuse without Playwright routing and preserve the exact production header (Tasks 5, 8).
+1. Non-BMP names, accents, apostrophes, and length boundaries: preserve/encode input once and count Unicode code points consistently (Tasks 1, 5, 6).
+2. Heterogeneous provider records and malformed optional values: exclude only invalid IDs/names while preserving valid people and mixed title order (Task 2).
+3. Clear/edit/submit races, old failures, and unmount: only the current UI submission may change results/loading (Task 6).
+4. Concurrent admission, rollback, crashes, and UTC rollover: application-owned transactions enforce durable caps without resetting cumulative usage (Tasks 1, 3).
+5. Browser caching obscured by test mocks or cookie changes: prove real HTTP-cache reuse without browser request routing and preserve production headers (Tasks 5, 8).
 
-## File map and implementation choices
+## How the general guide is adapted
 
-The repository has no product code. Create focused feature and adapter modules, not empty packages for future capabilities. Add normal Python `__init__.py` files to created package directories. Paths below are relative to the repository root.
-
-| Area | Files and responsibility |
+| Guide direction | F001 plan decision |
 | --- | --- |
-| Backend search core | `src/movie_discovery/people/models.py`, `ports.py`, `use_cases.py`: display DTOs, catalog/clock contracts, query validation and ordered selection. |
-| Access core | `src/movie_discovery/access/models.py`, `ports.py`: guest context, session, admission, and reservation contracts. Search imports the access-owned admission port. |
-| Provider | `src/movie_discovery/people/adapters/tmdb.py`: strict required-field validation, tolerant optional translation, bounded HTTPX call. |
-| Database | `src/movie_discovery/access/postgres.py`, `storage/tables.py`, `storage/engine.py`, `alembic.ini`, `migrations/env.py`, `migrations/versions/0001_guest_usage.py`: sessions and durable admission only. |
-| HTTP | `src/movie_discovery/http/app.py`, `schemas.py`, `context.py`, `search_routes.py`, `session_routes.py`, `errors.py`: request/response and cookie transport. |
-| Composition | `src/movie_discovery/bootstrap/settings.py`, `dependencies.py`, `asgi.py`, `observability.py`: runtime wiring, configuration, lifecycle, safe telemetry. |
-| Client core | `client/src/people/models.ts`, `ports.ts`, `controller.ts`: display model, search port, submission state machine without React/fetch/Expo. |
-| Client adapters | `client/src/people/adapters/http.ts`, `guestSession.ts`, `generated/`: transport, bootstrap, generated types/validators. |
-| Client view | `client/src/people/views/SearchPeopleScreen.tsx`, `PersonRow.tsx`, `useSearchPeople.ts`, `client/app/_layout.tsx`, `index.tsx`: platform UI and React lifecycle glue. |
-| Contract/tooling | `contracts/openapi.json`, `scripts/export_openapi.py`, `client/openapi-ts.config.ts`, `scripts/check_boundaries.py`: reproducible schema and import boundaries. |
-| Delivery | `Dockerfile.api`, `Dockerfile.web`, `Caddyfile`, `compose.yaml`, `compose.test.yaml`, `.dockerignore`, `README.md`, `.github/workflows/ci.yml`: local/test and deployable runtime without hosted publishing. |
-| Verification | `tests/unit/`, `tests/integration/`, `tests/http/`, `tests/support/`, colocated client `*.test.ts(x)`, `client/e2e/`, `client/playwright.config.ts`. |
+| Separate toolchain roots | Existing `backend/` uv project, new `frontend/` npm project, new `e2e/` npm project; root Makefile orchestrates them. |
+| Domain/application/adapters/bootstrap | Use `backend/src/app/` and `frontend/src/` layers with capability-named ports. One compact application initially; do not create bounded contexts or empty future modules. |
+| Application-owned transactions | Application `UsageAdmissionService` and `GuestSessionsService` use a UnitOfWork factory; Postgres repositories never commit automatically. |
+| UI hooks own interaction state | Replace the earlier application controller proposal with a stateless search use case and an inbound `useSearchPeople` hook owning loading, cancellation, generations, and stale-result protection. No debounce for explicit submission. |
+| Root OpenAPI + generated client boundary | Commit root `openapi.json`; generate and commit frontend types/Zod schemas, which is an explicitly permitted alternative to the guide's gitignored default. Generate no request SDK so the adapter controls normal HTTP caching. |
+| Architecture enforcement | Use import-linter and eslint-plugin-boundaries instead of a custom import-scanning script; test the actual configured tools with forbidden imports. |
+| Two Neon connections | App uses `DATABASE_URL` (pooled); migrations use `MIGRATION_DATABASE_URL` (direct); both use `postgresql+psycopg://`. Do not inspect actual values. |
+| Same-origin deployment | One combined static-web/Caddy image plus backend; local Postgres is an optional local Compose profile, with Neon externally supplied for deployment. No separate static web service is needed. |
+| General errors/cache/retry examples | Keep F001's `500`-only failures, browser-only cache policy, and one provider attempt. Do not introduce the guide's 429/502/503/504 responses or SearchCache abstraction. |
+| Trace framework integrations | Configure instrumentation outside the core, but apply the approved telemetry exclusions; do not enable raw URLs, bodies, queries, or credentials by default. No Tracer port is needed for this small use case. |
+| Recommendations/open questions | Defer per-PR Neon branches, EAS/native builds, shared TS packages, workspaces, and team-specific deployment choices. Local isolated Postgres is sufficient for CI. |
 
-Use root `pyproject.toml` with a Hatchling `src/` package and pytest's test path configured; add `uv.lock` through normal dependency resolution at execution. Add FastAPI, Pydantic Settings (no dotenv file loading), HTTPX with HTTP/2 support, SQLAlchemy, psycopg, Alembic, Logfire; add pytest-asyncio and ASGI lifespan test support to dev dependencies. Keep existing tooling. Resolve compatible releases when executing and commit locks; do not guess future package versions here.
+Paths below are repository-root-relative; add Python `__init__.py` files only for implemented packages. Commands are launched from the repo root using `uv --directory backend run …`, `npm --prefix frontend …`, and `npm --prefix e2e …`.
 
-For the client, use npm and Expo's default SDK 58 Router template, then remove the generated demo routes/assets not needed for search. Official Expo documentation currently identifies `default@sdk-58`; recheck compatibility at execution, record the actual SDK/Node requirements, and use Expo's installer for its peer dependencies. Use StyleSheet, React local lifecycle glue, and an injected plain controller; no app query-cache library. Generate TypeScript definitions and Zod v4 validators with `@hey-api/openapi-ts`, without a generated request SDK. Keep the hand-written HTTP adapter in control of browser cache behavior.
+## File map
 
-Tasks are sequential except for independent reads/checks. Each task ends with its targeted checks and an explicit-file commit; do not stage unrelated workspace changes. Test-first cycles apply to behavior. Configuration belongs to its owning deliverable, without artificial tests of static boilerplate.
+| Responsibility | Planned files |
+| --- | --- |
+| Backend domain | `backend/src/app/domain/people.py`, `access.py`, `errors.py`: frozen display/access values, policy values, owned failures. |
+| Backend application | `backend/src/app/application/ports/catalog.py`, `usage.py`, `sessions.py`, `unit_of_work.py`, `clock.py`; `use_cases/search_people.py`, `usage_admission.py`, `guest_sessions.py`: orchestration and explicit commits. |
+| TMDB outbound adapter | `backend/src/app/adapters/outbound/clients/tmdb_people/client.py`, `dto.py`, `mapper.py`: HTTP, boundary validation, translation. |
+| Persistence outbound adapter | `backend/src/app/adapters/outbound/persistence/models.py`, `repositories.py`, `unit_of_work.py`, `session.py`; `backend/alembic.ini`, `migrations/env.py`, `migrations/versions/0001_guest_usage.py`. |
+| HTTP inbound adapter | `backend/src/app/adapters/inbound/http/routers/v1/people.py`, `guest_session.py`, `schemas/people.py`, `deps.py`, `errors.py`, `context.py`. |
+| Backend composition | `backend/src/app/bootstrap.py`, `config.py`, `observability.py`, `main.py`: settings, concrete wiring, factory and lifespan. Treat all four as composition-layer modules for lint contracts. |
+| Backend tests | `backend/tests/unit/domain/`, `unit/application/`, `fakes/`, `integration/persistence/`, `integration/clients/`, `api/`. Provider tests use MockTransport; API tests use ASGITransport. |
+| Frontend domain/application | `frontend/src/domain/people.ts`, `errors.ts`; `application/ports/people-search-repository.ts`, `guest-session-repository.ts`; `application/use-cases/search-people.ts`; colocated tests. |
+| Frontend outbound API | `frontend/src/adapters/outbound/api/people-search-repository.ts`, `guest-session-repository.ts`, `mappers.ts`, `generated/`; colocated tests. Only files within this API adapter subtree import generated artifacts. |
+| Frontend inbound UI | `frontend/src/adapters/inbound/ui/SearchPeopleScreen.tsx`, `PersonRow.tsx`, `useSearchPeople.ts`, `PeopleSearchContext.tsx`; colocated tests. |
+| Frontend composition/routes | `frontend/src/bootstrap/container.ts`, `Providers.tsx`; `frontend/src/app/_layout.tsx`, `index.tsx`; `frontend/src/test-utils/fakes/`, `renderWithPorts.tsx`. |
+| Contracts/enforcement | Root `openapi.json`; `backend/scripts/export_openapi.py`; import-linter contracts in `backend/pyproject.toml`; `frontend/openapi-ts.config.ts`, `eslint.config.mjs`; architecture checks in each project's tests. |
+| Browser testing | `e2e/package.json`, `package-lock.json`, `tsconfig.json`, `playwright.config.ts`, `tests/search-people.spec.ts`, `tests/cache.spec.ts`, `support/tmdb-server.ts`, `support/stack.ts`, `Dockerfile`. |
+| Delivery/tooling | `backend/Dockerfile`, `frontend/Dockerfile`, `deploy/caddy/Caddyfile`, `deploy/caddy/Caddyfile.test`, root `compose.yaml`, `compose.test.yaml`, `.dockerignore`, placeholder-only `.env.example`, `Makefile`, `README.md`, `.github/workflows/ci.yml`. |
 
-### Task 1: Backend use case and owned contracts
+Resolve compatible dependency versions at execution and commit each project's own lockfile. Retain existing backend tooling; add Hatchling src-package configuration, required runtime libraries, and pytest-asyncio/ASGI lifespan support/import-linter as dev tools. Initialize an Expo Router app using the currently documented SDK 58 template, rechecking compatibility at execution. Use npm, StyleSheet, jest-expo/RNTL, Zod v4 and Hey API; keep Playwright exclusively in `e2e/`.
 
-**Files:** Modify `pyproject.toml`; create `uv.lock`, search/access core files from the file map, `tests/support/fakes.py`, `tests/unit/test_search_people.py`.
+**Layer enforcement:** allow inward and same-layer dependencies, with two explicit composition details. Backend `main/config/observability/bootstrap` form the outer composition layer. Frontend `_layout.tsx` is the sole route composition entrypoint allowed to install bootstrap `Providers`; other routes remain thin inbound adapters. Declare `PeopleSearchContext` in the inbound UI adapter: bootstrap imports/provides that context, and UI hooks import the sibling context, never bootstrap. Generated artifacts stay private to the outbound API adapter even from bootstrap and UI.
 
-**Interfaces:**
-- `PersonSummary(name: str, department: str | None, profile_image_url: str | None, known_for: tuple[str, ...])` and `SearchPeopleResult(query: str, people: tuple[PersonSummary, ...])`: frozen dataclasses, no IDs.
-- `GuestContext(profile_id: UUID, session_id: UUID, ip_key: str)`; `Reservation(id: UUID)`; `AttemptOutcome` enum `SUCCESS`, `FAILED`, `CANCELLED`.
-- `PeopleCatalog.search_first_page(query: str) -> tuple[PersonSummary, ...]` (async): adapter returns all valid first-page candidates, without sorting.
-- `UsageAdmission.admit(context: GuestContext, now: datetime) -> Reservation`, `mark_dispatched(reservation: Reservation) -> None`, `finish(reservation: Reservation, outcome: AttemptOutcome) -> None`, `release_undispatched(reservation: Reservation) -> None` (async).
-- `Clock.now() -> datetime`; `SearchPeople(catalog: PeopleCatalog, admission: UsageAdmission, clock: Clock).execute(raw_query: str, context: GuestContext) -> SearchPeopleResult` (async).
-- `SearchFailed(category: str)` is the owned failure; internal categories are telemetry-only. No HTTP/framework types in these contracts.
+Tasks remain sequential. Each task has a behavior-first test cycle and an explicit-file commit; setup/configuration belongs to its owning deliverable. Do not create product files while reviewing this plan.
 
-- [ ] Add the build/test dependencies and package configuration needed to run the behavioral tests, preserving existing settings. Configure pytest-asyncio with `asyncio_mode = "auto"` for the async tests below.
-- [ ] Write failing async tests. Define `FakeCatalog`, `FakeAdmission`, `FixedClock`, and `person(name)` in `tests/support/fakes.py`; they record calls and permit injected failures. Core assertions:
+### Task 1: Backend core, transaction ports, and layer contracts
+
+**Files:** Modify `backend/pyproject.toml`; create `backend/uv.lock`, domain/application files from the map, `backend/tests/fakes/search.py`, `unit/application/test_search_people.py`, `unit/domain/test_people.py`.
+
+**Interfaces:** Frozen `PersonSummary(name: str, department: str | None, profile_image_url: str | None, known_for: tuple[str, ...])`, `SearchPeopleResult(query: str, people: tuple[PersonSummary, ...])`, `GuestContext(profile_id: UUID, session_id: UUID, ip_key: str)`, `Reservation(id: UUID)`, `GuestSession(context: GuestContext, proof: str, is_new: bool)`, and `AttemptOutcome` (`SUCCESS`, `FAILED`, `CANCELLED`) live in domain modules. `SearchFailed(category: str)` carries no HTTP type.
+
+Application protocols: async `PeopleCatalog.search_first_page(query: str) -> tuple[PersonSummary, ...]`; async `UsageAdmission.admit(context: GuestContext, now: datetime) -> Reservation`, `mark_dispatched(reservation: Reservation) -> None`, `finish(reservation: Reservation, outcome: AttemptOutcome) -> None`, `release_undispatched(reservation: Reservation) -> None`; `Clock.now() -> datetime`. `SearchPeople(catalog: PeopleCatalog, admission: UsageAdmission, clock: Clock).execute(raw_query: str, context: GuestContext) -> SearchPeopleResult` is async.
+
+Declare async `AccessUnitOfWork` with `usage: UsageRepository`, `sessions: GuestSessionRepository`, `commit() -> None`, `rollback() -> None`, and async context entry/exit. `UnitOfWorkFactory.__call__() -> AccessUnitOfWork` returns a fresh transaction scope. UoW context exit rolls back uncommitted changes; it never commits automatically.
+
+Define the shared transaction types/ports in this task so imports and fakes are complete before Task 3. Domain/access owns immutable `CounterKey(scope: str, subject: str, feature: str, window: str)`, `ReservationRecord(id: UUID, provider_keys: tuple[CounterKey, ...], state: str)`, `StoredGuestSession(profile_id: UUID, session_id: UUID, expires_at: datetime)`, and `UsagePolicy`. Its required positive-integer fields are `global_requests_per_minute`, `session_requests_per_minute`, `ip_requests_per_minute`, `bootstrap_requests_per_ip_per_minute`, `global_provider_daily`, `session_provider_daily`, `ip_provider_daily`, `global_provider_total`, `session_provider_total`, `ip_provider_total`. Windows are UTC minute/day identifiers or a cumulative identifier; reservation states are `reserved`, `dispatched`, `success`, `failed`, `cancelled`, `released`.
+
+Application transaction-scoped protocols: async `UsageRepository.lock_counters(keys: tuple[CounterKey, ...]) -> dict[CounterKey, int]`, `add_counts(deltas: Mapping[CounterKey, int]) -> None`, `add_reservation(record: ReservationRecord) -> None`, `get_reservation_for_update(reservation: Reservation) -> ReservationRecord`, `save_reservation(record: ReservationRecord) -> None`; async `GuestSessionRepository.find(token_digest: bytes, now: datetime) -> StoredGuestSession | None`, `create(context: GuestContext, token_digest: bytes, expires_at: datetime) -> None`. The owned `GuestSessions` protocol exposes async `bootstrap(proof: str | None, ip_key: str, now: datetime) -> GuestSession` and `resolve(proof: str | None, ip_key: str, now: datetime) -> GuestContext`. Implement declarations and recording fakes here; concrete persistence and services arrive in Task 3. Use standard-library types and typing.Protocol only.
+
+- [ ] Add necessary package/dependencies, pytest paths, `asyncio_mode = "auto"`, and import-linter contracts. Enforce composition → adapters → application → domain, and forbid core imports of all framework/provider/persistence libraries with external-package inspection enabled.
+- [ ] Write failing use-case tests with recording fake catalog/admission/clock implementations. Primary assertions in `test_preserves_provider_order_and_limits_to_seven`:
 
 ```python
-async def test_preserves_provider_order_and_limits_to_seven():
-    catalog = FakeCatalog(tuple(person(str(i)) for i in range(10)))
-    admission = FakeAdmission()
-    result = await SearchPeople(catalog, admission, FixedClock()).execute(" Tom ", CONTEXT)
-    assert result.query == "Tom"
-    assert [p.name for p in result.people] == [str(i) for i in range(7)]
-    assert catalog.queries == ["Tom"]
-    assert admission.dispatch_count == 1
-    assert admission.outcomes == [AttemptOutcome.SUCCESS]
+result = await search.execute(" Tom ", context)
+assert result.query == "Tom"
+assert [p.name for p in result.people] == [str(i) for i in range(7)]
+assert catalog.queries == ["Tom"]
+assert admission.dispatch_count == 1
+assert admission.outcomes == [AttemptOutcome.SUCCESS]
 ```
 
-Also write `test_empty_and_short_pages_do_not_request_more` (0 and 3 entries unchanged), `test_query_codepoint_boundaries` (1 and 200 accepted, 201/blank rejected, accents/non-BMP preserved), `test_failed_admission_never_dispatches`, and `test_provider_failure_and_cancellation_account_for_dispatch` (no retry; completion is conservative).
-- [ ] Run `uv run pytest tests/unit/test_search_people.py -q`; confirm behavioral failures before implementation, not unresolved dependencies.
-- [ ] Implement the contracts/use case. Validate before external admission; mark dispatch durably before invoking the catalog; select `candidates[:7]`; never retain results. Release proven-undispatched reservations only; uncertain/dispatched attempts remain charged. Ensure cancellation cleanup cannot erase possibly spent allowance.
-- [ ] Re-run the command; expect all tests passing. Run `uv run ruff check src tests` and `uv run pyrefly check`.
-- [ ] Commit the task's files: `feat: add people search use case and owned ports`.
+`test_short_or_empty_page_never_fetches_more` checks unchanged 0/3-entry pages. `test_query_codepoint_boundaries` accepts 1/200 Unicode code points, rejects 201/blank without dispatch, and preserves accents/non-BMP text. `test_admission_failure_never_dispatches` and `test_failure_or_cancellation_keeps_spent_allowance` assert no retry and conservative cleanup.
+- [ ] Run `uv --directory backend run pytest tests/unit -q`; confirm failures on missing behavior, not missing dependencies.
+- [ ] Implement validation, admission/dispatch orchestration, ordered `candidates[:7]`, and cancellation-safe completion. Search calls the admission port outside provider I/O; Task 3's application service will own its individual transactions. No result persistence or SQL/framework imports.
+- [ ] Re-run unit tests, `uv --directory backend run lint-imports`, `uv --directory backend run ruff check src tests`, and `uv --directory backend run pyrefly check`; expect pass.
+- [ ] Commit: `feat: add people search core and transaction contracts`.
 
-### Task 2: TMDB adapter and fixture translation
+### Task 2: TMDB integration adapter
 
-**Files:** Create `src/movie_discovery/people/adapters/tmdb.py`, `tests/unit/test_tmdb_people.py`; reuse `docs/samples/api/tmdb/v3/search/person.json` unchanged.
+**Files:** Create the three `tmdb_people/` files and `backend/tests/integration/clients/test_tmdb_people.py`; reuse `docs/samples/api/tmdb/v3/search/person.json` unchanged, locating it from the repository path rather than the process working directory.
 
-**Interfaces:** Consume Task 1's `PeopleCatalog`, `PersonSummary`, and `SearchFailed`. Produce `TMDBPeopleCatalog(client: httpx.AsyncClient, max_bytes: int = 1048576)` implementing `search_first_page(query)`; composition supplies the base URL and authorization header.
+**Interfaces:** `TMDBPeopleCatalog(client: httpx.AsyncClient, max_bytes: int = 1048576)` implements `PeopleCatalog`; bootstrap supplies a long-lived configured client. Vendor Pydantic DTOs live in `dto.py`; `mapper.py` returns frozen domain summaries, not vendor DTOs.
 
-- [ ] Write failing tests with `httpx.MockTransport`, loading the repository fixture. In `test_fixture_order_titles_and_images`, assert:
+- [ ] Write failing MockTransport tests. `test_fixture_order_titles_and_images` asserts:
 
 ```python
 assert request.url.path == "/3/search/person"
 assert dict(request.url.params) == {"query": "Tom"}
-assert [p.name for p in people[:7]] == [
-    "Tom Skerritt", "Tom Holland", "Tom Hanks", "Tom Cruise",
-    "Tom Hopper", "Tom Hardy", "Tom Welling",
-]
+assert [p.name for p in people[:7]] == ["Tom Skerritt", "Tom Holland", "Tom Hanks", "Tom Cruise", "Tom Hopper", "Tom Hardy", "Tom Welling"]
 assert people[4].known_for == ("The Umbrella Academy", "Resident Evil: Welcome to Raccoon City", "I Feel Pretty")
 assert people[6].known_for == ("Smallville", "Lucifer", "The Fog")
 assert people[0].profile_image_url == "https://image.tmdb.org/t/p/w180_and_h180_face/oWFCyBLm1lsbsbT5Nmx3SPMaqFZ.jpg"
 ```
 
-Add `test_required_fields_are_strict_optional_fields_are_tolerant`: IDs `True`, `"4139"`, zero, negative, or missing and blank/nonstring names are skipped; null/bad photo, department, or known-for values retain the person with fallbacks; mixed movie/TV entries preserve order up to three nonblank titles. Add `test_duplicate_valid_records_preserve_sequence`, `test_invalid_envelope_fails_but_invalid_records_do_not`, and `test_one_attempt_on_timeout_throttle_bad_json_or_oversize`; assert no detail/configuration/page-two calls and no retry.
-- [ ] Run `uv run pytest tests/unit/test_tmdb_people.py -q`; expect failures on missing behavior.
-- [ ] Implement envelope/per-record Pydantic validation and translation. Stream with a byte cap before decoding; tolerate malformed optional values. Strictly validate only required ID/name, then discard source IDs. Join the fixed image base with the relative path after stripping leading slashes; unusable/absolute URL values become `None`. Read movie `title`/TV `name`, trimming/omitting unusable text without filtering people.
-- [ ] Run `uv run pytest tests/unit/test_search_people.py tests/unit/test_tmdb_people.py -q`; expect pass. Confirm transport retries are zero and the adapter does not retain its last response.
-- [ ] Commit: `feat: add bounded TMDB people search adapter`.
+`test_strict_required_tolerant_optional_fields` skips boolean/string/zero/negative/missing IDs and blank/nonstring names, but retains malformed optional fields as fallbacks. Mixed movie/TV titles preserve up to three nonblank titles. `test_duplicates_preserve_sequence`, `test_bad_envelope_is_failure_not_empty`, and `test_timeout_throttle_bad_json_oversize_have_one_attempt` assert no retries or page/detail/configuration lookup.
+- [ ] Run `uv --directory backend run pytest tests/integration/clients -q`; confirm behavioral failures without containers or real provider access.
+- [ ] Implement bounded streaming/decoding, per-record validation and translation. Discard source IDs after validity checks. Optional data is tolerant; one bad record does not invalidate the page. Join the fixed image base with a usable relative path, stripping joining slashes; absolute/unusable paths become `None`. Raise owned errors rather than HTTPX/Pydantic exceptions across the port.
+- [ ] Re-run core and provider tests and `lint-imports`; expect pass. Verify no search response is retained on the adapter.
+- [ ] Commit: `feat: add TMDB people adapter and contract fixtures`.
 
-### Task 3: Durable guest sessions and admission
+### Task 3: Application-owned guest/admission transactions and Postgres repositories
 
-**Files:** Create access/storage adapter files, `alembic.ini`, migration files, `compose.test.yaml`, `tests/integration/conftest.py`, `test_access.py`, `test_admission.py`.
+**Files:** Create `backend/src/app/application/use_cases/usage_admission.py`, `guest_sessions.py`, persistence adapter/migration files, root `compose.test.yaml`, and `backend/tests/unit/application/test_access.py`, `integration/persistence/conftest.py`, `test_sessions.py`, `test_admission.py`, `test_unit_of_work.py`. Consume the complete shared declarations from Task 1.
 
-**Interfaces:** Consume Task 1 access contracts. Produce `PostgresUsageAdmission(session_factory, policy)` implementing `UsageAdmission`; `PostgresGuestSessions(session_factory).bootstrap(cookie: str | None, ip_key: str, now: datetime) -> GuestSession` and `.resolve(cookie: str | None, ip_key: str, now: datetime) -> GuestContext` (async). Declare `GuestSessions` in `access/ports.py` with those same bootstrap/resolve signatures; HTTP/composition depend on that protocol, not the concrete adapter. Define `GuestSession(context: GuestContext, cookie_value: str, is_new: bool)` and `UsagePolicy` in `access/models.py`. Invalid resolution raises `SearchFailed("session")`.
+**Interfaces:** `UsageAdmissionService(uow_factory: UnitOfWorkFactory, policy: UsagePolicy)` implements the Task 1 admission port. `GuestSessionsService(uow_factory, policy)` implements application `GuestSessions.bootstrap(proof: str | None, ip_key: str, now: datetime) -> GuestSession` and `resolve(proof: str | None, ip_key: str, now: datetime) -> GuestContext` (async). HTTP depends on those protocols, not Postgres classes. The core handles opaque proofs; cookie extraction/creation belongs to the HTTP adapter.
 
-`UsagePolicy` names required positive integer caps: `global_requests_per_minute`, `session_requests_per_minute`, `ip_requests_per_minute`, `bootstrap_requests_per_ip_per_minute`, and `global/session/ip_provider_daily` plus `global/session/ip_provider_total`. Supply all explicitly through deployment configuration; refuse live provider admission without a complete policy. Tests use small explicit caps (daily global 2, session 2, IP 2; request caps high enough to isolate that test). No operating allowance is inferred from environment absence.
+`PostgresAccessUnitOfWork` implements Task 1's UoW contract and binds repositories implementing those exact signatures. A stored session contains identity/expiry, not a chosen current-IP quota context: bootstrap/resolve combine stored identity with the server-resolved `ip_key` from the current request.
 
-- [ ] Write failing real-Postgres tests. `compose.test.yaml` uses a disposable Postgres 18 service, test-only trust authentication, and loopback binding; no operator credential files. The test harness receives an isolated test URL via its launcher and guards against non-test database use. Assertions for `test_concurrent_admission_caps_and_restart`:
+`UsagePolicy` requires positive global/session/IP request-per-minute, IP bootstrap-per-minute, and global/session/IP provider daily/cumulative caps. No live admission without explicit configuration. Isolated tests use daily caps of two and sufficiently high request caps to test concurrent budget admission.
 
-```python
-outcomes = await asyncio.gather(*(try_admit() for _ in range(20)))
-assert outcomes.count("admitted") == 2
-assert await fresh_adapter.try_admit_same_context() == "rejected"
-assert await read_global_daily_count() == 2
-```
+- [ ] Write failing fake-UoW application tests proving policy checks and explicit commits; `test_admission_commits_before_provider_and_rolls_back_failure` asserts `commit_count == 1` on admission, rollback/no capacity on failure, and no active UoW during a provider call. Test idempotent mark/finish/release and no refund for a dispatched/unknown reservation.
+- [ ] Write real-Postgres tests. `test_concurrent_cap_and_restart` starts 20 admissions with cap two and asserts exactly two admitted, durable counter two, and another rejection through a newly constructed service/UoW. `test_utc_rollover_keeps_total_cap`, `test_repository_does_not_commit`, `test_uncommitted_exit_rolls_back`, `test_sessions_reuse_expire_and_store_only_digests`, `test_existing_session_uses_current_server_ip_key`, and `test_storage_outage_blocks_dispatch` pin the boundary rules. Inspecting catalog absence belongs in persistence tests, not browser tests.
+- [ ] Start the isolated loopback-bound Postgres 18 service with `docker compose --env-file /dev/null -f compose.test.yaml up -d --wait`. Run backend access unit and persistence tests; expect failures before implementation. The test launcher supplies an isolated test database URL and guards against non-test databases, without loading credential files.
+- [ ] Implement **only** guest profiles/sessions, usage counters, and reservations. `PostgresAccessUnitOfWork` opens a fresh AsyncSession/transaction and binds repositories; explicit application `uow.commit()` is the only commit path. Repositories use SQL/flush and deterministic row-lock order, safely creating missing counter rows before locking. `__aexit__` rolls back uncommitted work, including failures/cancellation.
+- [ ] Implement application services using short separate UoW scopes for admission, marking dispatch, and settling/releasing. Policy checks all scopes before updating counts. Count requests and reserve one provider attempt on admission; only release a proven-undispatched reservation once. Unknown/crashed reservations stay charged. Bootstrap atomically applies its IP admission and creates/reuses a guest session with runtime-generated proof, digest storage, 24-hour server expiry, and no persistent browser-cookie expiry. Persist no person/search data.
+- [ ] Configure pooled `DATABASE_URL` for application sessions and direct `MIGRATION_DATABASE_URL` in Alembic, both `postgresql+psycopg://`. Tests can point both at the same disposable Postgres. Migrations run explicitly, outside request/startup races. Re-run tests plus `lint-imports`; verify no open transaction during external I/O, then tear down isolated test resources.
+- [ ] Commit: `feat: add application-owned guest and usage transactions`.
 
-Define these helpers in the integration test module over the concrete adapter; no production inspection endpoints. Add `test_utc_rollover_keeps_cumulative_cap`, `test_undispatched_release_is_idempotent`, `test_dispatch_or_crash_reservation_remains_charged`, `test_session_bootstrap_reuses_valid_cookie_and_replaces_expired_cookie`, `test_bootstrap_ip_limit_and_cookie_digest_storage`, and `test_database_outage_prevents_admission`.
-- [ ] Start only the isolated test database with `docker compose --env-file /dev/null -f compose.test.yaml up -d --wait`. Run `uv run pytest tests/integration -q`; expect behavioral failures before adapter implementation.
-- [ ] Implement migrations for **only** guest profiles/sessions, usage counters, and reservations. Store session-token digests, expiry, internal profile/session UUIDs, and keyed IP identifiers; never store search content. Generate runtime session proofs internally; use a session-only cookie later, a 24-hour server expiry, and rotation on replacement. Bootstrap is idempotent for a valid cookie and IP-throttled.
-- [ ] Implement counters keyed by scope, feature, and UTC window. Insert missing counters safely, lock affected rows in a consistent order, and check/update every scope in one transaction. Admission counts request usage and reserves one provider attempt; marking/finishing are idempotent. Release provider allowance only for a reservation proven undispatched, retaining request usage. A crash/unknown outcome never automatically refunds possibly spent capacity. Never hold a transaction during provider network I/O.
-- [ ] Re-run integration and Task 1 tests; expect pass, including concurrency/restart assertions against Postgres rather than SQLite. Tear down the isolated database when finished.
-- [ ] Commit: `feat: persist guest sessions and atomic search admission`.
+### Task 4: Inbound HTTP, composition, and root OpenAPI
 
-### Task 4: HTTP endpoints, lifecycle, and OpenAPI
+**Files:** Create HTTP/composition files from the map, `backend/scripts/export_openapi.py`, root `openapi.json`, and `backend/tests/api/conftest.py`, `test_people.py`, `test_sessions.py`, `test_openapi.py`.
 
-**Files:** Create HTTP/composition files from the map, `scripts/export_openapi.py`, `contracts/openapi.json`, `tests/http/conftest.py`, `test_search.py`, `test_session.py`, `test_openapi.py`.
+**Interfaces:** `HttpServices` in inbound `deps.py` holds owned search/session services. `create_app(services: HttpServices) -> FastAPI` in `app/main.py` is importable without runtime settings or network/database access. `build_container(settings: Settings) -> AppContainer` in bootstrap constructs concrete adapters and exposes services and async startup/close; `create_runtime_app() -> FastAPI` wires lifespan. Start production with `uvicorn app.main:create_runtime_app --factory`. Routers do not import bootstrap/config/observability.
 
-**Interfaces:** `create_app(dependencies: Dependencies) -> FastAPI` must be importable without loading operator configuration or making network/database calls. `build_dependencies(settings: Settings) -> Dependencies` owns concrete adapters/lifecycle. `POST /api/v1/guest-session` bootstraps a guest with `200`/no-store and an empty body; `GET /api/v1/people/search` exposes the exact approved response. `PersonResponse` and `SearchPeopleResponse` are Pydantic boundary schemas, including max seven people/max three titles.
+`POST /api/v1/guest-session` returns `200`, empty body, no-store, and a new cookie only when required. `GET /api/v1/people/search?query=...` uses Pydantic schemas only in inbound `schemas/people.py`: `PersonResponse` has name, nullable department/profile_image_url, known_for (max three strings); `SearchPeopleResponse` has query and people (max seven), no IDs.
 
-- [ ] Write failing API tests with fake ports and lifespan-managed ASGI transport. `test_search_success_and_blank_success_headers` asserts:
+- [ ] Write failing ASGITransport tests with fake application ports and lifespan. `test_success_and_empty_success_headers` asserts:
 
 ```python
 assert response.status_code == 200
@@ -159,22 +172,24 @@ assert set(response.json()) == {"query", "people"}
 assert set(response.json()["people"][0]) == {"name", "department", "profile_image_url", "known_for"}
 ```
 
-Also test `people: []`. Parameterize `test_every_search_failure_is_empty_500` over missing/blank/overlong query, absent/expired session, request limits, all budget scopes, upstream non-2xx/malformed envelope, timeout, database outage, response-validation error, and unexpected exception: `status_code == 500`, `content == b""`, `cache-control == "no-store"`, no dispatch when rejected before dispatch. `test_openapi_only_advertises_search_200_and_500` asserts exactly those response keys. `test_bootstrap_cookie_and_origin` asserts HttpOnly, same-site lax, Path=/, Secure in HTTPS mode, no persistent-cookie expiry, no-store, and rejection of an untrusted mutation Origin.
-- [ ] Run `uv run pytest tests/http -q`; expect failures before implementation.
-- [ ] Implement request parsing, owned error translation, and route-aware exception handlers that also cover dependency/validation/unhandled failures. Prevent FastAPI's automatic `422` entry in this operation's OpenAPI contract. Leave unrelated future routes free to choose their own policies. Request context uses the real peer IP unless an explicitly trusted proxy supplied a sanitized forwarding chain; normalize IPv4/IPv6 before keyed derivation. Add forged-forwarding-header and IPv6-equivalence tests in `test_session.py`.
-- [ ] Wire one long-lived HTTPX client with HTTP/2 fallback, zero transport retries, connect timeout 2 seconds, overall provider deadline 5 seconds, max 1 MiB response, and a bounded connection pool (20 connections, 10 keepalive). Use one async database session per transaction, pool size 5 plus max overflow 5. App request deadline is 7 seconds. Lifespan closes both pools. Settings load named runtime variables without dotenv files; use Pydantic's `hide_input_in_errors=True` and sanitized startup errors that report field names, never supplied values. Readiness checks database connectivity without provider dispatch.
-- [ ] Implement `scripts/export_openapi.py` using a schema-only app with inert dependencies; it writes deterministic sorted JSON without runtime configuration. Run `uv run python scripts/export_openapi.py`, then `uv run pytest tests/http tests/unit -q`; expect pass and an OpenAPI contract with only the agreed statuses and fields.
-- [ ] Commit: `feat: expose people search and guest HTTP contracts`.
+Also test `people: []`. `test_every_failure_is_empty_500` covers validation, session, all throttle/budget scopes, upstream response, timeout, unavailable storage, invalid output, and unhandled exception: status 500, empty body, no-store, and no dispatch if rejected first. `test_openapi_search_only_has_200_and_500` pins response keys. Session tests cover HttpOnly/same-site lax/Path=/, Secure on HTTPS, no persistent cookie expiry, bootstrap no-store/origin protection, forged forwarding headers, and IPv6 normalization.
+- [ ] Run `uv --directory backend run pytest tests/api -q`; confirm missing-behavior failures.
+- [ ] Implement routers/dependency parsing and route-aware failure handlers. Override FastAPI's default validation statuses and automatic OpenAPI 422 entry for search, without dictating unrelated future operations. Resolve peer IP only through configured trusted proxy rules and derive the keyed quota identity outside core.
+- [ ] Wire one HTTPX AsyncClient per provider base URL at bootstrap; close in lifespan. Use HTTP/2 fallback, zero transport retries, connect timeout two seconds, overall provider deadline five seconds, max 1 MiB response, pool 20 connections/10 keepalive. Use a database pool of five plus five overflow and an app deadline of seven seconds. Pydantic Settings stays outside core, loads no dotenv file, hides inputs in validation errors, and emits no supplied values on startup failure.
+- [ ] Export deterministic sorted root OpenAPI with inert services and no runtime settings/adapters. Run `uv --directory backend run python scripts/export_openapi.py`, API/core/provider tests, and import-linter. No exporter import may initialize a real session/client or load configuration. Compare a second export with the first for determinism before initial commit.
+- [ ] Commit: `feat: expose people search API and root OpenAPI contract`.
 
-### Task 5: Expo foundation, generated contracts, and client HTTP adapters
+### Task 5: Frontend application and outbound API boundary
 
-**Files:** Create `client/package.json`, `package-lock.json`, `app.json`, `tsconfig.json`, `jest.config.js`, `openapi-ts.config.ts`, client models/ports/adapters/generated files from the map, `http.test.ts`, `guestSession.test.ts`. Update `.gitignore` for client builds, test artifacts, and dependencies.
+**Files:** Create `frontend/package.json`, lockfile, app/TypeScript/Jest/Hey API/ESLint configuration, frontend domain/application/outbound API files and colocated tests from the map. Update `.gitignore` for dependencies/build/test outputs.
 
-**Interfaces:** `PersonSummary = { name: string; department: string | null; profileImageUrl: string | null; knownFor: readonly string[] }`; `SearchResult = { query: string; people: readonly PersonSummary[] }`; `PeopleSearchPort.search(query: string, signal: AbortSignal): Promise<SearchResult>` rejects on every failure. `GuestSessionPort.ensure(signal: AbortSignal): Promise<void>` and `invalidate(): void` hide cookie transport. `HttpPeopleSearch(fetchImpl, sessions)` implements the search port; `HttpGuestSession(fetchImpl)` implements session bootstrap. Generated names remain behind these adapters.
+**Interfaces:** Domain `PersonSummary` uses `name: string`, `department: string | null`, `profileImageUrl: string | null`, `knownFor: readonly string[]`; `SearchResult` holds `query: string` and `people: readonly PersonSummary[]`, without IDs. `normalizeQuery(raw: string): string` trims/checks 1–200 Unicode code points and throws an owned invalid-query error. Application `PeopleSearchRepository.search(query: string, signal: AbortSignal): Promise<SearchResult>` and `GuestSessionRepository.ensure(signal: AbortSignal): Promise<void>`, `invalidate(): void` are interfaces. Stateless `SearchPeople(repository: PeopleSearchRepository).execute(rawQuery: string, signal: AbortSignal): Promise<SearchResult>` validates then delegates; it owns no view state, timers, generation, or React lifecycle.
 
-- [ ] Initialize the Expo SDK 58 Router client at execution using `npx create-expo-app@latest client --template default@sdk-58`; remove demo routes. Install compatible jest-expo/Jest/React Native Testing Library, Zod v4, Hey API generator, and Playwright. Configure `npm test -- --runInBand`, `npm run typecheck`, `npm run lint`, `npm run generate:api`, and `npm run export:web` (`expo export --platform web`). Lock compatible versions; setup alone is not a test cycle.
-- [ ] Configure Hey API input `../contracts/openapi.json`, output `src/people/adapters/generated`, plugins `@hey-api/typescript` and `zod` with definitions enabled. Generate checked-in validators/types; wrap the generated search-response validator in the HTTP adapter rather than exposing it to the core.
-- [ ] Write failing adapter tests. `test_encodes_query_once_and_uses_normal_browser_cache` captures calls and asserts:
+`HttpPeopleSearchRepository(fetchImpl, sessions)` and `HttpGuestSessionRepository(fetchImpl)` implement the ports. DTO-to-domain translation is in API `mappers.ts`; generated transport names stay private to the adapter subtree.
+
+- [ ] Initialize Expo Router in `frontend/` with the currently documented SDK 58 template, remove demo content, and retain one `src/app/` route root. Install compatible jest-expo/Jest/RNTL, Zod v4, Hey API, and eslint-plugin-boundaries. Do not install Playwright here. Provide test/typecheck/lint/generate:api/export:web scripts and commit `frontend/package-lock.json`.
+- [ ] Configure Hey API input `../openapi.json`, output `src/adapters/outbound/api/generated`, TypeScript and Zod definition plugins. Commit generated definitions/validators; generate no request SDK. Configure boundaries including external/framework imports, generated isolation, UI/bootstrap direction, and the single `_layout` composition exception.
+- [ ] Write failing domain/application tests for 1/200/201/blank and non-BMP queries; invalid input makes zero repository calls. Write outbound adapter tests whose captured requests assert:
 
 ```typescript
 expect(searchUrl).toBe('/api/v1/people/search?query=' + encodeURIComponent("Timothée O'Neil & 李😀"));
@@ -184,86 +199,84 @@ expect(searchOptions.headers?.['Cache-Control']).toBeUndefined();
 expect(result.people[0]).not.toHaveProperty('id');
 ```
 
-`test_repeated_searches_use_transport_without_query_cache` observes two transport calls for two searches (actual HTTP caching belongs to the browser). `test_rejects_500_bad_json_invalid_schema_and_abort` asserts rejection, no automatic search retry, and session readiness invalidation after a non-cancellation failure. `test_bootstrap_is_coalesced_and_reused` asserts one bootstrap for concurrent/normal subsequent searches; after explicit invalidation the next manual attempt bootstraps once. Bootstrap failure never dispatches search.
-- [ ] Run `npm --prefix client test -- --runInBand`; confirm behavioral failures before adapter bodies.
-- [ ] Implement the owned models and adapters: same-origin relative URLs, default fetch cache behavior, cookie credentials, generated runtime validation, and DTO-to-client field translation. Combine caller cancellation with an 8-second client deadline in the adapter. Session bootstrap stores only an in-memory readiness promise, not an exposed cookie or cached search result; on failure, recover only on the next explicit submission, never replay search automatically.
-- [ ] Run client tests, typecheck/lint, schema export, and generation again. `git diff --exit-code -- contracts/openapi.json client/src/people/adapters/generated` must show no drift after the generated files are committed in this task. Before that commit, compare a second generation with the first using temporary copies.
-- [ ] Commit: `feat: add Expo search transport and generated validation`.
+`test_repeated_calls_use_transport_without_result_cache` observes two fetch calls for two completed searches. `test_500_bad_json_bad_schema_abort_reject_without_retry` asserts rejection and invalidates readiness after a non-cancellation failure. `test_bootstrap_is_coalesced_and_reused` asserts one bootstrap for concurrent/subsequent calls; next manual attempt after invalidation bootstraps once. Bootstrap failure never dispatches search.
+- [ ] Run `npm --prefix frontend test -- --runInBand`; confirm failures before implementation.
+- [ ] Implement stateless use case, repositories, generated Zod validation, and mappers. Use relative same-origin URLs, cookie credentials, default browser cache behavior, and caller cancellation combined with an eight-second adapter deadline. Bootstrap caches only in-memory readiness, never cookies or result lists; recover on the next explicit submission, without replaying search. No frontend source references TMDB or another catalog vendor.
+- [ ] Re-run tests/typecheck/lint/export. Regenerate twice and compare outputs; after initial generated commit, require `git diff --exit-code -- openapi.json frontend/src/adapters/outbound/api/generated`. No imports from generated code may escape the API adapter subtree.
+- [ ] Commit: `feat: add frontend search use case and API adapters`.
 
-### Task 6: Submission controller and wireframe screen
+### Task 6: Inbound UI hooks, composition, and wireframes
 
-**Files:** Create `client/src/people/controller.ts`, `controller.test.ts`, view files and `SearchPeopleScreen.test.tsx`, `PersonRow.test.tsx`; replace the scaffolded routes with `client/app/_layout.tsx` and `client/app/index.tsx` (move the template's route root if necessary rather than retaining two Router roots).
+**Files:** Create inbound UI/bootstrap/test-utils files from the map and their colocated tests; replace generated routes with `frontend/src/app/_layout.tsx` and `index.tsx` only. No non-route files in `src/app/`.
 
-**Interfaces:** `SearchState = { draft: string; submitted: string | null; phase: 'initial' | 'loading' | 'results' | 'blank'; people: readonly PersonSummary[] }`. `SearchPeopleController(port: PeopleSearchPort)` exposes `getSnapshot(): SearchState`, `subscribe(listener: () => void): () => void`, `setDraft(value: string): void`, `submit(): Promise<void>`, `dispose(): void`. Framework glue in `useSearchPeople.ts` subscribes with React lifecycle APIs and disposes on unmount; core contains no React, DOM, Expo, or fetch imports.
+**Interfaces:** UI-owned `SearchState` contains draft, submitted query, phase (`initial`, `loading`, `results`, `blank`), and people. `useSearchPeople()` returns state plus `setDraft(value: string): void` and `submit(): Promise<void>`. `PeopleSearchContext` exposes `{ searchPeople: SearchPeople }`; bootstrap `createContainer(fetchImpl)` builds API adapters/use case and `Providers` installs the UI-owned context. `renderWithPorts` wraps components/hooks with fakes, without importing the production container. Hook imports sibling context, domain/application types; it never constructs an HTTP repository or imports bootstrap.
 
-- [ ] Write failing controller tests with manually resolved/rejected promises. `test_latest_submission_wins_even_after_old_failure` submits A, then B, resolves B, rejects A, and asserts:
-
-```typescript
-expect(controller.getSnapshot()).toMatchObject({ phase: 'results', submitted: 'B', people: peopleB });
-```
-
-`test_clear_invalidates_pending_work` resolves an old request after clearing and asserts `phase === 'initial'` and `people` empty. `test_duplicate_pending_query_is_ignored` asserts one port call. `test_failure_and_empty_success_are_blank` asserts `phase === 'blank'`, no people, no loading. `test_codepoint_length_and_no_typing_dispatch` accepts 200 non-BMP code points and rejects 201, preserving accents/apostrophes. Invalid submissions must invalidate earlier work so a delayed result cannot refill the blank state.
-- [ ] Write view tests: Enter/Return and icon submit, typing does not; an active IME composition does not submit; input remains editable/focused; changed draft enables submission during loading; stale draft edits retain completed results. Assert the exact placeholder `Search for actors, directors, or creative team to follow`, heading `Cast & Crew`, initial/loading `Example searches:` and all three names/roles from the spec. After empty/failure completion, examples disappear and no message replaces them. Rows have no Follow/Movies controls, no IDs or clickable person action, up to three mixed titles, and image-error/missing-image silhouettes without broken separators.
+- [ ] Write failing hook/component tests with RNTL `renderHook`/`act` and deferred fake repository promises. `test_latest_submission_wins_even_after_old_failure` submits A/B, resolves B, rejects A, and asserts phase results/submitted B/people B. `test_clear_or_unmount_invalidates_pending_completion` proves no repopulation or late state update. `test_duplicate_pending_query_is_ignored` asserts one repository call. Empty success and errors both assert blank people and loading false; invalid submissions invalidate old work before validating.
+- [ ] Write screen tests for keyboard/pointer submission, no typing dispatch, IME composition protection, editable/focused input, changed-draft submission while loading, and retaining completed results during edits. Pin exact wireframe copy:
 
 ```typescript
+expect(screen.queryByText('Cast & Crew')).not.toBeNull();
+expect(screen.queryByText('Example searches:')).not.toBeNull();
 expect(screen.queryByText('Timothée Chalamet (Actor)')).not.toBeNull();
 expect(screen.queryByText('Hayao Miyazaki (Director, Writer)')).not.toBeNull();
 expect(screen.queryByText('Autumn Durald Arkapaw (Cinematographer)')).not.toBeNull();
-// After resolving empty success or failure, all three queries return null.
 ```
-- [ ] Run `npm --prefix client test -- --runInBand`; expect targeted behavioral failures.
-- [ ] Implement the controller with a monotonically increasing submission generation and AbortController. Compare generation before **any** completion/finally mutation, including errors. Determine query length via code points (`Array.from(trimmed).length`), not UTF-16 length. Implement views using RN primitives and StyleSheet, matching supplied spacing/hierarchy, visible focus, and at least a 44×44 search target; use busy accessibility state without added empty/error announcements. Use only transient row keys derived from submission/position.
-- [ ] Run client tests, typecheck, lint, and `npm --prefix client run export:web`; expect pass. Inspect initial/loading/results and a narrow viewport; fix clipping without redesigning the feature or adding new copy.
-- [ ] Commit: `feat: implement people search screen and submission behavior`.
 
-### Task 7: Runtime packaging, safe telemetry, and boundaries
+Placeholder is `Search for actors, directors, or creative team to follow`. Examples appear in initial/loading states and disappear after a completed empty/failing search. Assert no additional hints/messages/Follow/Movies actions, three mixed titles maximum, and silhouette fallback without dangling separators.
+- [ ] Run frontend tests; confirm behavior failures.
+- [ ] Implement submission generation, AbortController lifetime, duplicate suppression, draft/submitted state, and stale-success/failure/finally guards **inside the inbound UI hook**, not the application use case. All completion paths check current generation. Clearing/unmount aborts/invalidate pending work; no debounce or automatic submission. Use RN primitives/StyleSheet, busy accessibility state without extra announcements, visible focus, and a 44×44 minimum search target. Keys are transient submission/position keys, not new IDs.
+- [ ] Wire production Providers only at `_layout`; other routes import screens. Run tests/typecheck/lint/export and inspect initial/loading/results/narrow viewport against the supplied wireframes. Fix clipping without adding copy or future controls.
+- [ ] Commit: `feat: add people search UI and composition`.
 
-**Files:** Create runtime/CI files from the map, `src/movie_discovery/observability.py`, `scripts/check_boundaries.py`, `tests/unit/test_observability.py`, `tests/unit/test_boundaries.py`; extend composition wiring.
+### Task 7: Same-origin packaging, instrumentation, and monorepo commands
 
-**Interfaces:** `configure_observability(enabled: bool) -> None` is called only by composition. `scripts/check_boundaries.py` exits nonzero with file/import diagnostics when core imports adapters/frameworks. Production starts `movie_discovery.bootstrap.asgi:app`; health routes `/health/live` and `/health/ready` perform no TMDB calls.
+**Files:** Create backend/frontend Dockerfiles, deploy Caddyfile, root Compose/Makefile/placeholder `.env.example`/README/CI files, `backend/src/app/observability.py`, `backend/tests/unit/test_observability.py`, `test_architecture_contracts.py`, `frontend/src/test-utils/architecture.test.ts`; extend composition wiring. Use tool configs already introduced in Tasks 1 and 5 rather than a bespoke scanner.
 
-- [ ] Write failing `test_telemetry_omits_query_payloads_and_credentials` using a local in-memory exporter and synthetic sentinels: captured spans/logs contain internal failure category, latency, counts, and correlation but none of query text, raw fixture content, cookie/authorization values, or database URL. `test_core_dependency_violations_are_detected` uses temporary Python/TS files to assert framework/provider/generated-adapter imports are rejected in core and allowed in adapters.
-- [ ] Run `uv run pytest tests/unit/test_observability.py tests/unit/test_boundaries.py -q`; confirm failures.
-- [ ] Configure Logfire with a route/template-only request span and sanitized exception reporting. Disable automatic HTTP/SQL body, query-string, full URL, cookie, authorization, and parameter capture; do not assume default scrubbing removes names. Disable Uvicorn query-bearing access logs and Caddy query-bearing access logging; use explicit safe correlation events. Telemetry defaults off without operator setup and never blocks search.
-- [ ] Add multi-stage Docker builds for the Python API and exported Expo web/Caddy image. Caddy serves static web and proxies `/api/*` without rewriting cache headers or adding cookie variation; TLS/HTTP2 is negotiated at ingress with HTTP/1.1 fallback to API. `compose.yaml` has web/API only with operator-supplied Postgres configuration; `compose.test.yaml` provides isolated Postgres and test services. Use `.dockerignore` exclusions for VCS, dependencies, test artifacts, and credential files; never copy an existing `.env` or inspect its values.
-- [ ] Add README commands for migrations, bootstrap/search, export/generation, local same-origin run, required configuration **names only**, and explicit admission-policy setup. Document fixed timeouts/byte/pool bounds, UTC counting, five-minute browser freshness, silent failures and server diagnosis, no search persistence, and no hosted deployment. Add CI for the locked installs and all bounded checks; CI has no live TMDB/Neon/Logfire dependency.
-- [ ] Run observability/boundary tests, `uv run python scripts/check_boundaries.py`, and build both Docker images. Check `/health/ready` with the isolated database and prove readiness makes zero stub-provider calls.
-- [ ] Commit: `build: package search app and enforce safe boundaries`.
+**Interfaces:** `configure_observability(enabled: bool) -> None` is composition-only. `/health/live` and `/health/ready` make no catalog calls. Root Makefile targets: `dev`, `test`, `generate`, `lint`, `migrate`, `test-integration`, `test-e2e`, `test-cache-expiry`. The first five orchestrate the guide's independent projects without making them workspaces; `test` is container-free, and `test-integration` explicitly launches isolated persistence checks.
 
-### Task 8: Real browser flow, HTTP caching, and final verification
+- [ ] Write failing telemetry tests with an in-memory exporter and synthetic sentinels: preserve correlation, latency, failure categories, selected/invalid counts and quota outcomes, while omitting full query, payload, cookie/auth values and connection strings. Write architecture-tool checks that run configured import-linter/ESLint against temporary forbidden imports: core→framework, core→adapter, UI→generated, UI→bootstrap, and non-layout route→bootstrap must fail; the actual tree and `_layout` wiring pass. Do not test a homemade approximation of the real linter.
+- [ ] Run the targeted backend/frontend checks; confirm failures before wiring instrumentation/contracts.
+- [ ] Configure Logfire at FastAPI/SQLAlchemy/HTTPX adapter/composition boundaries with sanitized spans. Disable raw URLs/query strings, bodies, SQL parameters, cookies/auth values and unsanitized exception payloads; default instrumentation must not override privacy exclusions. Disable Uvicorn/Caddy query-bearing access logs. Telemetry defaults off without operator setup and cannot block search.
+- [ ] Package backend with a multi-stage uv build and `uv sync --frozen --no-dev`; package frontend via npm/export then copy `dist/` to a Caddy stage. Caddy serves static assets and proxies `/api/*` to backend without altering cache headers or adding cookie variation. TLS/HTTP2 is ingress-owned with HTTP/1.1 upstream fallback. Root Compose has backend and combined web/Caddy plus an optional local Postgres profile; deployed database remains Neon. No separate static web service, workers, Redis, or CORS middleware.
+- [ ] Add named settings for pooled/direct database connections and required caps. Placeholder-only `.env.example` documents variable names without actual values; scripts/builds must not read or copy an existing environment file. Local/test Compose commands explicitly use `--env-file /dev/null` unless an operator runs their own configuration. Use root `.dockerignore` and narrow build contexts to exclude VCS, credentials, dependencies and artifacts. Run migrations as a separate operator/Make target through the direct connection.
+- [ ] Add README setup/run/generate/test instructions, exact response/cache behavior and telemetry diagnosis, no search persistence, and no hosted publishing. CI has independently locked/path-filtered backend/frontend/e2e jobs; changes to root OpenAPI, shared fixture/guide/spec docs, Compose, or Makefile trigger all affected jobs. Browser tests run for backend, frontend, or e2e runtime changes. Contract-drift and import/boundary checks are mandatory. Use isolated Postgres, never a required live TMDB/Neon/Logfire service; per-PR Neon branches remain optional future work.
+- [ ] Run import-linter, frontend boundaries lint, telemetry tests, both image builds, and readiness checks with isolated Postgres; assert readiness calls no provider. Verify `make generate` exports root OpenAPI then generates frontend validators without secrets or live services; `make lint` invokes both projects' lint/type/boundary checks.
+- [ ] Commit: `build: add monorepo runtime and architecture enforcement`.
 
-**Files:** Create `tests/support/tmdb_server.py`, `tests/support/run_e2e.py`, `Caddyfile.test`, `client/playwright.config.ts`, `client/e2e/search-people.spec.ts`, `cache.spec.ts`; update `compose.test.yaml`, client scripts, README, and CI.
+### Task 8: Independent Playwright package and real browser caching
 
-**Interfaces:** The fixture server implements `/3/search/person` over real local HTTP, records request counts in test-process memory, and selects delay/empty/error fixtures by synthetic test query. `run_e2e.py --suite normal|cache-expiry` launches isolated database/API/stub/ingress, injects the stub base URL through test composition, and runs built-web Playwright checks. There is no public production test-control endpoint. Test-only `Caddyfile.test` retains the real API/cache routing and blocks external image downloads with `Content-Security-Policy: img-src 'self' data:` so fixtures use deterministic fallback images without contacting TMDB's CDN. Adapter tests cover complete image URL construction. Browser telemetry remains local; no real provider credentials are used.
+**Files:** Create all `e2e/` files from the map and `deploy/caddy/Caddyfile.test`; update test Compose, Makefile, README and CI. Playwright tests stay under `e2e/tests`; API-level assertions stay under `backend/tests/api`, and persistence assertions stay under backend integration tests.
 
-- [ ] Write failing built-app tests: search `Tom`, assert seven fixture names in order, movie/TV titles, no IDs/actions, and initial/loading examples. Exercise icon plus keyboard submission, missing/broken image, empty `200`, failing `500`, malformed response, slow responses, clear-during-load, quota rejection, and a non-BMP name. Assertions use visible rows, input/busy state, and absence of extra messages, not implementation CSS classes.
-- [ ] Write `test_real_browser_private_cache_reuse` in a fresh Chromium context with **no** `page.route`, context routing, HAR replay, or service-worker interception. Submit the same completed query twice; observe API/stub counters outside the browser and assert one search/provider dispatch, while normal bootstrap runs once. Assert exact cache header and absent cookie variation on the first network response. Change the guest cookie through normal test bootstrap/expiry setup and repeat in the same browser: successful search data remain identity-independent and can be reused.
-- [ ] Add opt-in `test_cache_expires_after_300_seconds`: keep the production header unchanged, wait just over 300 real seconds via asynchronous test timers, repeat, and assert a second search/provider dispatch. Run it as a separately labelled slow check with a bounded per-test timeout, not a fake JS clock (that does not age the browser network cache). During agent execution keep the process asynchronous and give progress updates at least every 60 seconds. Normal CI runs cache reuse; the slow check runs in its own CI job/manual full verification.
-- [ ] Run `uv run python tests/support/run_e2e.py --suite normal`; expect meaningful failures until harness/wiring completes. Implement only the test harness and necessary integration fixes; do not change feature behavior or shorten the production cache lifetime to pass tests.
-- [ ] Run `uv run python tests/support/run_e2e.py --suite normal` and `uv run python tests/support/run_e2e.py --suite cache-expiry` against the exported app and actual ingress. Confirm errors stop loading and leave blank results, while provider failures remain `500` server-side. Check migrations/state after repeated searches contain session/usage data and no catalog/result/mapping tables or columns holding query content.
-- [ ] Run the final bounded verification set: `uv run ruff check .`, `uv run pyrefly check`, `uv run pytest tests/unit tests/http -q`, isolated-Postgres integration tests, `uv run python scripts/check_boundaries.py`, `npm --prefix client run typecheck`, `npm --prefix client run lint`, `npm --prefix client test -- --runInBand`, `npm --prefix client run export:web`. Regenerate schema/client code and require `git diff --exit-code -- contracts/openapi.json client/src/people/adapters/generated`. Run `git diff --check`; inspect the changed-file list for unrelated or credential files.
-- [ ] Commit the verified integration deliverable: `test: verify people search and browser caching end to end`. Record exact command results and any environmental limitation in the handoff. Do not claim live provider, hosted deployment, or native testing if only fixture-backed web checks ran.
+**Interfaces:** `npm --prefix e2e test` runs normal built-app tests; `npm --prefix e2e run test:cache-expiry` runs the labelled slow suite. `support/stack.ts` manages the isolated Compose topology and cleanup. `support/tmdb-server.ts` serves the fixture over real HTTP, with delay/empty/error scenarios and test-only request counters; it is a test service, not production functionality. The fixture server has its own Dockerfile in `e2e/` and never imports backend/frontend source. Test Caddy blocks external image downloads with `Content-Security-Policy: img-src 'self' data:` while preserving real API/cache routing, so browsers use fallback images without contacting the vendor CDN.
+
+- [ ] Initialize separate `e2e/package.json`/lock/TypeScript/Playwright configuration, with no frontend/backend code dependencies and no root workspaces. Stub vendor HTTP outside the browser; expose test control/counts only in the isolated test service, never production API. Read shared fixture data from docs; API schema coupling is only root `openapi.json` when needed.
+- [ ] Write failing browser-flow tests for seven fixture names/order/mixed titles, initial/loading examples, icon/keyboard submission, empty/failure blank results, slow/overlapping requests, clear-during-load, quota rejection, Unicode input, and image fallback. Observe HTTP status/header behavior through browser network events; do not duplicate ASGI schema-unit tests here.
+- [ ] Write `test_real_browser_private_cache_reuse` in a fresh Chromium context with **no** page/context routing, HAR replay, or service-worker interception. Submit the same completed query twice and assert one provider dispatch using the stub counter. Observe exact cache-control/absent cookie variation on the first network response; normal bootstrap runs once. Replace the guest cookie through normal noncacheable bootstrap in that browser, repeat the same search, and assert identity-independent cached data can still be reused.
+- [ ] Write opt-in `test_cache_expires_after_300_seconds`: keep the production header unchanged, wait just over 300 real seconds asynchronously, then assert another dispatch. A mocked JS clock does not age the browser network cache. Give the slow test its own bounded timeout/job; report progress at least every 60 seconds during agent execution. Normal CI proves reuse; a separate slow job/manual full check proves expiry.
+- [ ] Run the normal package test command; expect failures until test-stack wiring is implemented. Implement only the harness and required integration fixes, preserving production semantics. Test topology is local Postgres/backend/combined web-Caddy plus the stub; no live provider, operator credentials or browser request interception.
+- [ ] Run both normal and cache-expiry packages against the built app/real ingress. Run backend domain/application/API/provider tests, isolated persistence tests, import-linter, frontend unit/component/adapter/type/lint/export checks, and e2e typecheck. `make test` runs container-free backend/frontend checks; `make test-integration`, `make test-e2e`, and `make test-cache-expiry` are explicit. `make generate` followed by `git diff --exit-code -- openapi.json frontend/src/adapters/outbound/api/generated` must show no drift. Run `git diff --check` and inspect changed filenames for unrelated/sensitive artifacts.
+- [ ] Commit: `test: verify composed search and private browser caching`. Record actual commands/results and any environment limitation; do not claim native/live-provider/hosted verification from fixture-backed web checks.
 
 ## Coverage and self-review
 
-Self-review complete: each design requirement is assigned above. Task 1 owns query/order/count and dispatch rules; Task 2 owns provider eligibility/title/image/default translation; Task 3 owns durable guest/admission state; Task 4 owns status/headers/schema/session transport; Task 5 owns generated validation and normal browser fetch semantics; Task 6 owns wireframe interactions and blank presentation; Task 7 owns runtime, telemetry, and dependency boundaries; Task 8 proves the composed web flow and real HTTP cache. All five Review Focus cases have explicit owning tests. Shared signatures/field names above are the integration contracts; generated wire names are translated only in adapters. No independent subsystem or future feature is bundled into F001.
+The eight tasks retain the approved search behavior while applying the guide. Tasks 1–3 own pure rules, provider translation and application-owned durable transactions; Task 4 owns HTTP/schema/composition; Tasks 5–6 separate client application behavior from inbound UI lifecycle; Task 7 owns enforceable layers, privacy, commands and delivery; Task 8 owns browser-only acceptance. All five Review Focus cases have named checks. Signatures, root contract location, generated-code boundary, unit-of-work ownership, and per-package paths/commands are consistent across the tasks.
 
-These are **planned commands and acceptance criteria**, not results of implementation. No product code, dependencies, migrations, or runtime artifacts have been created by writing this plan.
+This document contains planned commands and acceptance criteria, **not implementation results**. Updating it creates no application scaffolding, dependencies, migrations or running services. The guide itself and existing backend files are inputs, not files to rewrite during planning.
 
 ## Execution handoff
 
-No execution method has been selected. Ask the owner to review this plan and choose before implementation:
+No execution method has been selected. Ask the owner to review this revised plan and choose before implementation:
 
-- **Native, recommended for this plan:** the primary agent implements the eight tasks in sequence, followed by an independent whole-branch review. Tasks share the core, admission, API, and client contracts closely, so keeping one implementer avoids repeated context setup while review still checks the final integration.
-- **Subagent-driven:** a fresh implementer and reviewer per task, followed by a whole-branch review. More independent task gates, with additional context/review cost.
+- **Native, recommended:** one implementer works through the eight dependent tasks, followed by independent whole-branch review. Keeping shared transaction/API/UI contracts in one context reduces repeated setup.
+- **Subagent-driven:** fresh implementer and reviewer per task, plus whole-branch review, with more task gates and context cost.
 
-Use the selected method's required skill at execution. Detect the existing linked worktree and preserve the feature branch rather than creating redundant isolation. A tool/sandbox restriction is not permission to skip checks or publish; report concrete limitations and retain the approved scope.
+Use the selected method's skill at execution and preserve the existing linked worktree/feature branch. Do not infer authorization to publish or skip blocked checks.
 
 ## Primary references checked during planning
 
-- [Expo project creation](https://docs.expo.dev/more/create-expo/): SDK 58 template; [Expo unit testing](https://docs.expo.dev/develop/unit-testing/): jest-expo setup.
-- [FastAPI error handling](https://fastapi.tiangolo.com/tutorial/handling-errors/): overriding request-validation and exception handlers.
-- [HTTPX async clients](https://www.python-httpx.org/async/): long-lived async client lifecycle.
-- [Postgres locking](https://www.postgresql.org/docs/current/explicit-locking.html): ordered transactional locking for admission.
-- [Hey API Zod generation](https://heyapi.dev/docs/openapi/typescript/plugins/zod): generated runtime validators.
-- [Playwright request routing](https://playwright.dev/docs/api/class-browsercontext#browser-context-route): routing disables HTTP caching; cache acceptance tests use real local HTTP instead.
+- [Expo creation](https://docs.expo.dev/more/create-expo/) and [unit testing](https://docs.expo.dev/develop/unit-testing/).
+- [FastAPI error handlers](https://fastapi.tiangolo.com/tutorial/handling-errors/) and [HTTPX async lifecycle](https://www.python-httpx.org/async/).
+- [Postgres locking](https://www.postgresql.org/docs/current/explicit-locking.html) and [Hey API Zod generation](https://heyapi.dev/docs/openapi/typescript/plugins/zod).
+- [Import Linter layers](https://import-linter.readthedocs.io/en/stable/contract_types/layers/) and [forbidden imports](https://import-linter.readthedocs.io/en/stable/contract_types/forbidden/): include external dependencies in core prohibitions.
+- [JS Boundaries dependency policies](https://www.jsboundaries.dev/docs/rules/dependencies/): use current local/external dependency policies, including unknown-file coverage, rather than deprecated rule names.
+- [Playwright routing](https://playwright.dev/docs/api/class-browsercontext#browser-context-route): request routing disables HTTP caching; test caching through real local HTTP instead.
