@@ -9,3 +9,13 @@ __pycache__/
 .env.*
 !.env.example
 .DS_Store
+
+# JavaScript and build outputs
+node_modules/
+.expo/
+dist/
+coverage/
+playwright-report/
+test-results/
+expo-env.d.ts
+.import_linter_cache/
