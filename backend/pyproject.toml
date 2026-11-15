@@ -23,6 +23,7 @@ exclude-newer = "3 days"
 
 [tool.pyrefly]
 preset = "strict"
+python-interpreter-path = ".venv/bin/python"
 search-path = ["src", "."]
 
 [tool.coverage.run]
