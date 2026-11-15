@@ -1,12 +1,17 @@
 [project]
-name = "ics603-fa26-final-project"
+name = "lumiere"
 version = "0.1.0"
 description = "A web app that helps people discover movies from their favorite actors, directors and creative team."
 requires-python = ">=3.13"
-dependencies = []
+dependencies = [
+    "fastapi>=0.120", "uvicorn>=0.38", "httpx[http2]>=0.28",
+    "pydantic>=2.12", "pydantic-settings>=2.11", "sqlalchemy[asyncio]>=2.0",
+    "psycopg[binary]>=3.2", "alembic>=1.17", "logfire>=4.0",
+]
 
 [dependency-groups]
 dev = [
+    "pytest-asyncio>=1.2", "asgi-lifespan>=2.1", "import-linter>=2.6",
     "pyrefly>=1.4.1",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
@@ -18,6 +23,7 @@ exclude-newer = "3 days"
 
 [tool.pyrefly]
 preset = "strict"
+search-path = ["src", "."]
 
 [tool.coverage.run]
 branch = true
@@ -27,3 +33,31 @@ extend-select = ["C90"]
 
 [tool.ruff.lint.mccabe]
 max-complexity = 10
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/lumiere"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]
+pythonpath = ["."]
+
+[tool.importlinter]
+root_package = "lumiere"
+include_external_packages = true
+
+[[tool.importlinter.contracts]]
+name = "Inward layers"
+type = "layers"
+layers = ["(lumiere.main) : (lumiere.config) : (lumiere.observability) : (lumiere.bootstrap)", "(lumiere.adapters)", "lumiere.application", "lumiere.domain"]
+
+[[tool.importlinter.contracts]]
+name = "Framework-free core"
+type = "forbidden"
+source_modules = ["lumiere.domain", "lumiere.application"]
+forbidden_modules = ["fastapi", "pydantic", "pydantic_settings", "httpx", "sqlalchemy", "psycopg", "alembic", "logfire", "uvicorn"]
