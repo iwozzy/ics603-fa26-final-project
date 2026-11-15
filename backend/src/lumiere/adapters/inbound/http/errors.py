@@ -18,27 +18,62 @@ async def validation_failure(request: Request, exc: RequestValidationError) -> R
     return await request_validation_exception_handler(request, exc)
 
 
+def _failure_category(error: Exception) -> str:
+    if isinstance(error, SearchFailed):
+        return error.category
+    return "deadline" if isinstance(error, TimeoutError) else "internal"
+
+
 class FailureBoundary:
-    def __init__(self, app: ASGIApp) -> None:
+    def __init__(self, app: ASGIApp, deadline: float = 7) -> None:
         self.app = app
+        self.deadline = deadline
+        self._operations: set[asyncio.Task[None]] = set()
 
     async def __call__(self, scope: Scope, receive: Receive, send: Send) -> None:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
+        await self._http(scope, receive, send)
+
+    async def _http(self, scope: Scope, receive: Receive, send: Send) -> None:
         started = False
+        expired = False
 
         async def tracked_send(message: Message) -> None:
             nonlocal started
+            if expired:
+                return
             if message["type"] == "http.response.start":
                 started = True
             await send(message)
 
+        async def invoke() -> None:
+            await self.app(scope, receive, tracked_send)
+
+        operation = asyncio.create_task(invoke())
+        self._operations.add(operation)
+        operation.add_done_callback(self._discard)
         try:
-            async with asyncio.timeout(7):
-                await self.app(scope, receive, tracked_send)
+            # asyncio.timeout waits for cancellation cleanup. A separate wait
+            # keeps dependency cleanup from extending the HTTP deadline.
+            done, _ = await asyncio.wait({operation}, timeout=self.deadline)
+            if not done:
+                raise TimeoutError
+            await operation
+        except asyncio.CancelledError:
+            expired = True
+            operation.cancel()
+            raise
         except Exception as error:  # noqa: BLE001 — sanitize at the outer HTTP boundary
-            category = error.category if isinstance(error, SearchFailed) else "deadline" if isinstance(error, TimeoutError) else "internal"
-            scope.setdefault("state", {})["failure_category"] = category
+            expired = True
+            if operation.cancel():
+                await asyncio.sleep(0)  # Deliver cancellation without waiting for cleanup.
+            scope.setdefault("state", {})["failure_category"] = _failure_category(error)
             if not started:
                 await failure_response()(scope, receive, send)
+
+    def _discard(self, operation: asyncio.Task[None]) -> None:
+        self._operations.discard(operation)
+        if not operation.cancelled():
+            operation.exception()  # Consume late errors; never log raw dependency exceptions.

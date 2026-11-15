@@ -1,3 +1,4 @@
+import asyncio
 from datetime import UTC, datetime
 from uuid import uuid4
 
@@ -31,6 +32,7 @@ class FakeAdmission:
         self.dispatch_count = 0
         self.releases = 0
         self.outcomes: list[AttemptOutcome] = []
+        self.finished = asyncio.Event()
 
     async def admit(self, context: GuestContext, now: datetime) -> Reservation:
         if self.error:
@@ -45,6 +47,7 @@ class FakeAdmission:
 
     async def finish(self, reservation: Reservation, outcome: AttemptOutcome) -> None:
         self.outcomes.append(outcome)
+        self.finished.set()
 
     async def release_undispatched(self, reservation: Reservation) -> None:
         self.releases += 1

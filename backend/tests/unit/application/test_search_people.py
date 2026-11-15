@@ -57,6 +57,7 @@ async def test_failure_or_cancellation_keeps_spent_allowance(context: GuestConte
     with pytest.raises(type(error)):
         await SearchPeople(catalog, admission, FakeClock()).execute("Tom", context)
     assert catalog.queries == ["Tom"]
+    await asyncio.wait_for(admission.finished.wait(), 1)
     assert admission.outcomes == [outcome]
     assert admission.releases == 0
 

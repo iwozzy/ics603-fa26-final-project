@@ -30,10 +30,20 @@ class PostgresAccessUnitOfWork:
 
     async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
         try:
-            if self.session.in_transaction():
-                await asyncio.shield(self.rollback())
-        finally:
-            await asyncio.shield(self.session.close())
+            if isinstance(exc, asyncio.CancelledError):
+                # Psycopg closes its socket locally on invalidation, letting
+                # Postgres roll back, without awaiting a network rollback ACK.
+                await self.session.invalidate()
+            else:
+                if self.session.in_transaction():
+                    await self.rollback()
+                await self.session.close()
+        except asyncio.CancelledError:
+            await self.session.invalidate()
+            raise
+        except SQLAlchemyError:
+            await self.session.invalidate()
+            raise SearchFailed("storage") from None
         if isinstance(exc, SQLAlchemyError):
             raise SearchFailed("storage") from None
 
