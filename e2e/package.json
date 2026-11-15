@@ -1,0 +1,16 @@
+{
+  "name": "lumiere-e2e",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "playwright test --grep-invert @cache-expiry",
+    "test:cache-expiry": "playwright test --grep @cache-expiry",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.56.0",
+    "typescript": "~6.0.3",
+    "@types/node": "^24.0.0"
+  }
+}

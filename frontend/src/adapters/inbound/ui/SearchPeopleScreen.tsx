@@ -20,7 +20,7 @@ export default function SearchPeopleScreen() {
           const native = event.nativeEvent as { isComposing?: boolean; keyCode?: number };
           if (!native.isComposing && native.keyCode !== 229) submit();
         }} />
-        <Pressable accessibilityRole="button" accessibilityLabel="Search" accessibilityState={{ busy, disabled: duplicate }} disabled={duplicate} onPress={submit} onFocus={() => setButtonFocused(true)} onBlur={() => setButtonFocused(false)} style={[styles.search, buttonFocused && styles.buttonFocused]}>
+        <Pressable accessibilityRole="button" accessibilityLabel="Search" aria-busy={busy} accessibilityState={{ busy, disabled: duplicate }} disabled={duplicate} onPress={submit} onFocus={() => setButtonFocused(true)} onBlur={() => setButtonFocused(false)} style={[styles.search, buttonFocused && styles.buttonFocused]}>
           {duplicate ? <ActivityIndicator color="#667180" accessibilityElementsHidden importantForAccessibility="no-hide-descendants" /> : <View accessible={false} style={styles.icon}><View style={styles.lens} /><View style={styles.handle} /></View>}
         </Pressable>
       </View>
