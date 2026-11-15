@@ -1,8 +1,8 @@
-# F001 Search People Implementation Plan
+# Lumiere F001 Search People Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Deliver the approved people-search feature: up to seven valid people from the provider's default first page, in provider order, through the wireframed Expo interface.
+**Goal:** Deliver Lumiere's approved people-search feature: up to seven valid people from the provider's default first page, in provider order, through the wireframed Expo interface.
 
 **Architecture:** A monorepo contains independent backend, frontend, and browser-test projects. Both application sides use domain → application → adapters → bootstrap layers with dependencies pointing inward. Root `openapi.json` is the sole backend/frontend contract; only guest/session and usage state is persisted.
 
@@ -11,6 +11,8 @@
 **Spec:** [Approved F001 design](../specs/2026-11-13-F001-search-people-design.md), [amended architecture](../specs/2026-11-09-application-architecture-design.md), and [repository structure guide](../../samples/architecture-and-repo-structure-guide.md). Revised to incorporate the guide at the owner's request. Feature-specific agreed behavior takes precedence over the guide's general examples.
 
 ## Global Constraints
+
+- The application is called **Lumiere** (owner revision, 2026-11-15). Use `lumiere` where lowercase naming is conventional: backend distribution/import package `lumiere`, Expo slug `lumiere`, npm packages `lumiere-frontend` and `lumiere-e2e`. Display name, web document title, and API/OpenAPI title are `Lumiere`. Keep framework-required names such as `frontend/src/app/` and the wireframe heading `Cast & Crew`.
 
 - Python 3.13+; preserve `backend/pyproject.toml`, `backend/.python-version`, existing Ruff/Pyrefly/coverage configuration, and uv's `exclude-newer = "3 days"` policy. The owner has already moved Python tooling into `backend/`; do not recreate a root Python project.
 - Submit on Enter/Return or clicking/tapping the search icon. Typing does not initiate search.
@@ -42,7 +44,8 @@
 | Guide direction | F001 plan decision |
 | --- | --- |
 | Separate toolchain roots | Existing `backend/` uv project, new `frontend/` npm project, new `e2e/` npm project; root Makefile orchestrates them. |
-| Domain/application/adapters/bootstrap | Use `backend/src/app/` and `frontend/src/` layers with capability-named ports. One compact application initially; do not create bounded contexts or empty future modules. |
+| Product/package naming | Adapt the guide's generic Python `app` package to `lumiere`; retain Expo Router's conventional `src/app/` route directory. |
+| Domain/application/adapters/bootstrap | Use `backend/src/lumiere/` and `frontend/src/` layers with capability-named ports. One compact application initially; do not create bounded contexts or empty future modules. |
 | Application-owned transactions | Application `UsageAdmissionService` and `GuestSessionsService` use a UnitOfWork factory; Postgres repositories never commit automatically. |
 | UI hooks own interaction state | Replace the earlier application controller proposal with a stateless search use case and an inbound `useSearchPeople` hook owning loading, cancellation, generations, and stale-result protection. No debounce for explicit submission. |
 | Root OpenAPI + generated client boundary | Commit root `openapi.json`; generate and commit frontend types/Zod schemas, which is an explicitly permitted alternative to the guide's gitignored default. Generate no request SDK so the adapter controls normal HTTP caching. |
@@ -59,12 +62,12 @@ Paths below are repository-root-relative; add Python `__init__.py` files only fo
 
 | Responsibility | Planned files |
 | --- | --- |
-| Backend domain | `backend/src/app/domain/people.py`, `access.py`, `errors.py`: frozen display/access values, policy values, owned failures. |
-| Backend application | `backend/src/app/application/ports/catalog.py`, `usage.py`, `sessions.py`, `unit_of_work.py`, `clock.py`; `use_cases/search_people.py`, `usage_admission.py`, `guest_sessions.py`: orchestration and explicit commits. |
-| TMDB outbound adapter | `backend/src/app/adapters/outbound/clients/tmdb_people/client.py`, `dto.py`, `mapper.py`: HTTP, boundary validation, translation. |
-| Persistence outbound adapter | `backend/src/app/adapters/outbound/persistence/models.py`, `repositories.py`, `unit_of_work.py`, `session.py`; `backend/alembic.ini`, `migrations/env.py`, `migrations/versions/0001_guest_usage.py`. |
-| HTTP inbound adapter | `backend/src/app/adapters/inbound/http/routers/v1/people.py`, `guest_session.py`, `schemas/people.py`, `deps.py`, `errors.py`, `context.py`. |
-| Backend composition | `backend/src/app/bootstrap.py`, `config.py`, `observability.py`, `main.py`: settings, concrete wiring, factory and lifespan. Treat all four as composition-layer modules for lint contracts. |
+| Backend domain | `backend/src/lumiere/domain/people.py`, `access.py`, `errors.py`: frozen display/access values, policy values, owned failures. |
+| Backend application | `backend/src/lumiere/application/ports/catalog.py`, `usage.py`, `sessions.py`, `unit_of_work.py`, `clock.py`; `use_cases/search_people.py`, `usage_admission.py`, `guest_sessions.py`: orchestration and explicit commits. |
+| TMDB outbound adapter | `backend/src/lumiere/adapters/outbound/clients/tmdb_people/client.py`, `dto.py`, `mapper.py`: HTTP, boundary validation, translation. |
+| Persistence outbound adapter | `backend/src/lumiere/adapters/outbound/persistence/models.py`, `repositories.py`, `unit_of_work.py`, `session.py`; `backend/alembic.ini`, `migrations/env.py`, `migrations/versions/0001_guest_usage.py`. |
+| HTTP inbound adapter | `backend/src/lumiere/adapters/inbound/http/routers/v1/people.py`, `guest_session.py`, `schemas/people.py`, `deps.py`, `errors.py`, `context.py`. |
+| Backend composition | `backend/src/lumiere/bootstrap.py`, `config.py`, `observability.py`, `main.py`: settings, concrete wiring, factory and lifespan. Treat all four as composition-layer modules for lint contracts. |
 | Backend tests | `backend/tests/unit/domain/`, `unit/application/`, `fakes/`, `integration/persistence/`, `integration/clients/`, `api/`. Provider tests use MockTransport; API tests use ASGITransport. |
 | Frontend domain/application | `frontend/src/domain/people.ts`, `errors.ts`; `application/ports/people-search-repository.ts`, `guest-session-repository.ts`; `application/use-cases/search-people.ts`; colocated tests. |
 | Frontend outbound API | `frontend/src/adapters/outbound/api/people-search-repository.ts`, `guest-session-repository.ts`, `mappers.ts`, `generated/`; colocated tests. Only files within this API adapter subtree import generated artifacts. |
@@ -94,7 +97,7 @@ Define the shared transaction types/ports in this task so imports and fakes are 
 
 Application transaction-scoped protocols: async `UsageRepository.lock_counters(keys: tuple[CounterKey, ...]) -> dict[CounterKey, int]`, `add_counts(deltas: Mapping[CounterKey, int]) -> None`, `add_reservation(record: ReservationRecord) -> None`, `get_reservation_for_update(reservation: Reservation) -> ReservationRecord`, `save_reservation(record: ReservationRecord) -> None`; async `GuestSessionRepository.find(token_digest: bytes, now: datetime) -> StoredGuestSession | None`, `create(context: GuestContext, token_digest: bytes, expires_at: datetime) -> None`. The owned `GuestSessions` protocol exposes async `bootstrap(proof: str | None, ip_key: str, now: datetime) -> GuestSession` and `resolve(proof: str | None, ip_key: str, now: datetime) -> GuestContext`. Implement declarations and recording fakes here; concrete persistence and services arrive in Task 3. Use standard-library types and typing.Protocol only.
 
-- [ ] Add necessary package/dependencies, pytest paths, `asyncio_mode = "auto"`, and import-linter contracts. Enforce composition → adapters → application → domain, and forbid core imports of all framework/provider/persistence libraries with external-package inspection enabled.
+- [ ] Set `backend/pyproject.toml` project name to `lumiere` and configure Hatchling to package `src/lumiere`. Add necessary package/dependencies, pytest paths, `asyncio_mode = "auto"`, and import-linter contracts. Use import-linter root package `lumiere` and enforce composition → adapters → application → domain, and forbid core imports of all framework/provider/persistence libraries with external-package inspection enabled.
 - [ ] Write failing use-case tests with recording fake catalog/admission/clock implementations. Primary assertions in `test_preserves_provider_order_and_limits_to_seven`:
 
 ```python
@@ -137,7 +140,7 @@ assert people[0].profile_image_url == "https://image.tmdb.org/t/p/w180_and_h180_
 
 ### Task 3: Application-owned guest/admission transactions and Postgres repositories
 
-**Files:** Create `backend/src/app/application/use_cases/usage_admission.py`, `guest_sessions.py`, persistence adapter/migration files, root `compose.test.yaml`, and `backend/tests/unit/application/test_access.py`, `integration/persistence/conftest.py`, `test_sessions.py`, `test_admission.py`, `test_unit_of_work.py`. Consume the complete shared declarations from Task 1.
+**Files:** Create `backend/src/lumiere/application/use_cases/usage_admission.py`, `guest_sessions.py`, persistence adapter/migration files, root `compose.test.yaml`, and `backend/tests/unit/application/test_access.py`, `integration/persistence/conftest.py`, `test_sessions.py`, `test_admission.py`, `test_unit_of_work.py`. Consume the complete shared declarations from Task 1.
 
 **Interfaces:** `UsageAdmissionService(uow_factory: UnitOfWorkFactory, policy: UsagePolicy)` implements the Task 1 admission port. `GuestSessionsService(uow_factory, policy)` implements application `GuestSessions.bootstrap(proof: str | None, ip_key: str, now: datetime) -> GuestSession` and `resolve(proof: str | None, ip_key: str, now: datetime) -> GuestContext` (async). HTTP depends on those protocols, not Postgres classes. The core handles opaque proofs; cookie extraction/creation belongs to the HTTP adapter.
 
@@ -157,7 +160,7 @@ assert people[0].profile_image_url == "https://image.tmdb.org/t/p/w180_and_h180_
 
 **Files:** Create HTTP/composition files from the map, `backend/scripts/export_openapi.py`, root `openapi.json`, and `backend/tests/api/conftest.py`, `test_people.py`, `test_sessions.py`, `test_openapi.py`.
 
-**Interfaces:** `HttpServices` in inbound `deps.py` holds owned search/session services. `create_app(services: HttpServices) -> FastAPI` in `app/main.py` is importable without runtime settings or network/database access. `build_container(settings: Settings) -> AppContainer` in bootstrap constructs concrete adapters and exposes services and async startup/close; `create_runtime_app() -> FastAPI` wires lifespan. Start production with `uvicorn app.main:create_runtime_app --factory`. Routers do not import bootstrap/config/observability.
+**Interfaces:** `HttpServices` in inbound `deps.py` holds owned search/session services. `create_app(services: HttpServices) -> FastAPI` in `lumiere/main.py` is importable without runtime settings or network/database access. `build_container(settings: Settings) -> AppContainer` in bootstrap constructs concrete adapters and exposes services and async startup/close; `create_runtime_app() -> FastAPI` wires lifespan. Start production with `uvicorn lumiere.main:create_runtime_app --factory`. Routers do not import bootstrap/config/observability.
 
 `POST /api/v1/guest-session` returns `200`, empty body, no-store, and a new cookie only when required. `GET /api/v1/people/search?query=...` uses Pydantic schemas only in inbound `schemas/people.py`: `PersonResponse` has name, nullable department/profile_image_url, known_for (max three strings); `SearchPeopleResponse` has query and people (max seven), no IDs.
 
@@ -172,9 +175,9 @@ assert set(response.json()) == {"query", "people"}
 assert set(response.json()["people"][0]) == {"name", "department", "profile_image_url", "known_for"}
 ```
 
-Also test `people: []`. `test_every_failure_is_empty_500` covers validation, session, all throttle/budget scopes, upstream response, timeout, unavailable storage, invalid output, and unhandled exception: status 500, empty body, no-store, and no dispatch if rejected first. `test_openapi_search_only_has_200_and_500` pins response keys. Session tests cover HttpOnly/same-site lax/Path=/, Secure on HTTPS, no persistent cookie expiry, bootstrap no-store/origin protection, forged forwarding headers, and IPv6 normalization.
+Also test `people: []`. `test_every_failure_is_empty_500` covers validation, session, all throttle/budget scopes, upstream response, timeout, unavailable storage, invalid output, and unhandled exception: status 500, empty body, no-store, and no dispatch if rejected first. `test_openapi_search_only_has_200_and_500` pins response keys; assert OpenAPI `info.title == "Lumiere"`. Session tests cover HttpOnly/same-site lax/Path=/, Secure on HTTPS, no persistent cookie expiry, bootstrap no-store/origin protection, forged forwarding headers, and IPv6 normalization.
 - [ ] Run `uv --directory backend run pytest tests/api -q`; confirm missing-behavior failures.
-- [ ] Implement routers/dependency parsing and route-aware failure handlers. Override FastAPI's default validation statuses and automatic OpenAPI 422 entry for search, without dictating unrelated future operations. Resolve peer IP only through configured trusted proxy rules and derive the keyed quota identity outside core.
+- [ ] Implement routers/dependency parsing and route-aware failure handlers. Set FastAPI title to `Lumiere`. Override FastAPI's default validation statuses and automatic OpenAPI 422 entry for search, without dictating unrelated future operations. Resolve peer IP only through configured trusted proxy rules and derive the keyed quota identity outside core.
 - [ ] Wire one HTTPX AsyncClient per provider base URL at bootstrap; close in lifespan. Use HTTP/2 fallback, zero transport retries, connect timeout two seconds, overall provider deadline five seconds, max 1 MiB response, pool 20 connections/10 keepalive. Use a database pool of five plus five overflow and an app deadline of seven seconds. Pydantic Settings stays outside core, loads no dotenv file, hides inputs in validation errors, and emits no supplied values on startup failure.
 - [ ] Export deterministic sorted root OpenAPI with inert services and no runtime settings/adapters. Run `uv --directory backend run python scripts/export_openapi.py`, API/core/provider tests, and import-linter. No exporter import may initialize a real session/client or load configuration. Compare a second export with the first for determinism before initial commit.
 - [ ] Commit: `feat: expose people search API and root OpenAPI contract`.
@@ -187,7 +190,7 @@ Also test `people: []`. `test_every_failure_is_empty_500` covers validation, ses
 
 `HttpPeopleSearchRepository(fetchImpl, sessions)` and `HttpGuestSessionRepository(fetchImpl)` implement the ports. DTO-to-domain translation is in API `mappers.ts`; generated transport names stay private to the adapter subtree.
 
-- [ ] Initialize Expo Router in `frontend/` with the currently documented SDK 58 template, remove demo content, and retain one `src/app/` route root. Install compatible jest-expo/Jest/RNTL, Zod v4, Hey API, and eslint-plugin-boundaries. Do not install Playwright here. Provide test/typecheck/lint/generate:api/export:web scripts and commit `frontend/package-lock.json`.
+- [ ] Initialize Expo Router in `frontend/` with the currently documented SDK 58 template, remove demo content, and retain one `src/app/` route root. Install compatible jest-expo/Jest/RNTL, Zod v4, Hey API, and eslint-plugin-boundaries. Set npm package name to `lumiere-frontend`, Expo display name to `Lumiere`, slug to `lumiere`, and web document title to `Lumiere`. Do not install Playwright here. Provide test/typecheck/lint/generate:api/export:web scripts and commit `frontend/package-lock.json`.
 - [ ] Configure Hey API input `../openapi.json`, output `src/adapters/outbound/api/generated`, TypeScript and Zod definition plugins. Commit generated definitions/validators; generate no request SDK. Configure boundaries including external/framework imports, generated isolation, UI/bootstrap direction, and the single `_layout` composition exception.
 - [ ] Write failing domain/application tests for 1/200/201/blank and non-BMP queries; invalid input makes zero repository calls. Write outbound adapter tests whose captured requests assert:
 
@@ -230,7 +233,7 @@ Placeholder is `Search for actors, directors, or creative team to follow`. Examp
 
 ### Task 7: Same-origin packaging, instrumentation, and monorepo commands
 
-**Files:** Create backend/frontend Dockerfiles, deploy Caddyfile, root Compose/Makefile/placeholder `.env.example`/README/CI files, `backend/src/app/observability.py`, `backend/tests/unit/test_observability.py`, `test_architecture_contracts.py`, `frontend/src/test-utils/architecture.test.ts`; extend composition wiring. Use tool configs already introduced in Tasks 1 and 5 rather than a bespoke scanner.
+**Files:** Create backend/frontend Dockerfiles, deploy Caddyfile, root Compose/Makefile/placeholder `.env.example`/README/CI files, `backend/src/lumiere/observability.py`, `backend/tests/unit/test_observability.py`, `test_architecture_contracts.py`, `frontend/src/test-utils/architecture.test.ts`; extend composition wiring. Use tool configs already introduced in Tasks 1 and 5 rather than a bespoke scanner.
 
 **Interfaces:** `configure_observability(enabled: bool) -> None` is composition-only. `/health/live` and `/health/ready` make no catalog calls. Root Makefile targets: `dev`, `test`, `generate`, `lint`, `migrate`, `test-integration`, `test-e2e`, `test-cache-expiry`. The first five orchestrate the guide's independent projects without making them workspaces; `test` is container-free, and `test-integration` explicitly launches isolated persistence checks.
 
@@ -249,8 +252,8 @@ Placeholder is `Search for actors, directors, or creative team to follow`. Examp
 
 **Interfaces:** `npm --prefix e2e test` runs normal built-app tests; `npm --prefix e2e run test:cache-expiry` runs the labelled slow suite. `support/stack.ts` manages the isolated Compose topology and cleanup. `support/tmdb-server.ts` serves the fixture over real HTTP, with delay/empty/error scenarios and test-only request counters; it is a test service, not production functionality. The fixture server has its own Dockerfile in `e2e/` and never imports backend/frontend source. Test Caddy blocks external image downloads with `Content-Security-Policy: img-src 'self' data:` while preserving real API/cache routing, so browsers use fallback images without contacting the vendor CDN.
 
-- [ ] Initialize separate `e2e/package.json`/lock/TypeScript/Playwright configuration, with no frontend/backend code dependencies and no root workspaces. Stub vendor HTTP outside the browser; expose test control/counts only in the isolated test service, never production API. Read shared fixture data from docs; API schema coupling is only root `openapi.json` when needed.
-- [ ] Write failing browser-flow tests for seven fixture names/order/mixed titles, initial/loading examples, icon/keyboard submission, empty/failure blank results, slow/overlapping requests, clear-during-load, quota rejection, Unicode input, and image fallback. Observe HTTP status/header behavior through browser network events; do not duplicate ASGI schema-unit tests here.
+- [ ] Initialize separate `e2e/package.json`/lock/TypeScript/Playwright configuration with package name `lumiere-e2e`, with no frontend/backend code dependencies and no root workspaces. Stub vendor HTTP outside the browser; expose test control/counts only in the isolated test service, never production API. Read shared fixture data from docs; API schema coupling is only root `openapi.json` when needed.
+- [ ] Write failing browser-flow tests for seven fixture names/order/mixed titles, initial/loading examples, web document title `Lumiere`, icon/keyboard submission, empty/failure blank results, slow/overlapping requests, clear-during-load, quota rejection, Unicode input, and image fallback. Observe HTTP status/header behavior through browser network events; do not duplicate ASGI schema-unit tests here.
 - [ ] Write `test_real_browser_private_cache_reuse` in a fresh Chromium context with **no** page/context routing, HAR replay, or service-worker interception. Submit the same completed query twice and assert one provider dispatch using the stub counter. Observe exact cache-control/absent cookie variation on the first network response; normal bootstrap runs once. Replace the guest cookie through normal noncacheable bootstrap in that browser, repeat the same search, and assert identity-independent cached data can still be reused.
 - [ ] Write opt-in `test_cache_expires_after_300_seconds`: keep the production header unchanged, wait just over 300 real seconds asynchronously, then assert another dispatch. A mocked JS clock does not age the browser network cache. Give the slow test its own bounded timeout/job; report progress at least every 60 seconds during agent execution. Normal CI proves reuse; a separate slow job/manual full check proves expiry.
 - [ ] Run the normal package test command; expect failures until test-stack wiring is implemented. Implement only the harness and required integration fixes, preserving production semantics. Test topology is local Postgres/backend/combined web-Caddy plus the stub; no live provider, operator credentials or browser request interception.

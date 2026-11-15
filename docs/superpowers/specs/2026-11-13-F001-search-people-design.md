@@ -6,11 +6,13 @@ Status: Approved by the project owner on 2026-11-13, after revisions and clarifi
 
 ## Intent and scope
 
-Help users find and recognize actors, directors, and other creative contributors by name, as the entry point to discovering movies through people. Deliver working web search through the Expo client, application API, and TMDB provider. Following is the next feature and receives its own design.
+Lumiere helps users find and recognize actors, directors, and other creative contributors by name, as the entry point to discovering movies through people. Deliver working web search through the Expo client, application API, and TMDB provider. Following is the next feature and receives its own design.
 
 The repository currently contains the approved architecture, wireframes, sample provider data, and Python tooling configuration. There is no application implementation to extend. F001 establishes only the foundations needed for search.
 
 ### Agreed product decisions
+
+- The app is called **Lumiere**, with `lumiere` used where lowercase naming is conventional (owner clarification, 2026-11-15).
 
 - Submit on Enter/Return or clicking/tapping the search icon. Typing does not initiate search.
 - Use only the provider's first page. Select up to the first seven valid people, preserving provider order. Return fewer when page one has fewer valid people; never fetch another page to fill the list.

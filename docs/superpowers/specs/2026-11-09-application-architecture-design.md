@@ -14,7 +14,9 @@ F001 clarification agreed on 2026-11-13: omit IDs from the search response and d
 
 ## Intent and document authority
 
-The application helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
+Naming clarification agreed on 2026-11-15: the app is **Lumiere**; use `lumiere` where lowercase naming is conventional.
+
+Lumiere helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
 
 This document establishes the boundaries, technology direction, data ownership, and operational rules that later feature designs must preserve. It is not an implementation plan or a complete feature specification. Ports described here are responsibilities, not final interface signatures.
 
