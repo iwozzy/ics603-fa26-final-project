@@ -13,6 +13,13 @@ from lumiere.application.use_cases.guest_sessions import GuestSessionsService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.config import Settings
+from lumiere.observability import (
+    ObservedTransport,
+    configure_observability,
+    instrument_database,
+    observe_services,
+    record_catalog_counts,
+)
 
 
 class SystemClock:
@@ -35,8 +42,10 @@ class AppContainer:
 
 
 def build_container(settings: Settings) -> AppContainer:
+    configure_observability(settings.telemetry_enabled)
     engine, sessions = create_sessions(settings.database_url.get_secret_value())
-    client = httpx.AsyncClient(base_url=settings.tmdb_base_url, headers={"Authorization": "Bearer " + settings.tmdb_access_token.get_secret_value()}, transport=httpx.AsyncHTTPTransport(http2=True, retries=0, limits=httpx.Limits(max_connections=20, max_keepalive_connections=10)), timeout=httpx.Timeout(5, connect=2), follow_redirects=False, trust_env=False)
+    instrument_database(engine.sync_engine)
+    client = httpx.AsyncClient(base_url=settings.tmdb_base_url, headers={"Authorization": "Bearer " + settings.tmdb_access_token.get_secret_value()}, transport=ObservedTransport(httpx.AsyncHTTPTransport(http2=True, retries=0, limits=httpx.Limits(max_connections=20, max_keepalive_connections=10))), timeout=httpx.Timeout(5, connect=2), follow_redirects=False, trust_env=False)
 
     def uows() -> PostgresAccessUnitOfWork:
         return PostgresAccessUnitOfWork(sessions)
@@ -46,5 +55,5 @@ def build_container(settings: Settings) -> AppContainer:
             await connection.execute(text("SELECT 1"))
 
     policy = settings.usage_policy()
-    services = HttpServices(SearchPeople(TMDBPeopleCatalog(client), UsageAdmissionService(uows, policy), SystemClock()), GuestSessionsService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready)
-    return AppContainer(services, client, engine)
+    services = HttpServices(SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock()), GuestSessionsService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready)
+    return AppContainer(observe_services(services), client, engine)

@@ -1,29 +1,22 @@
-import asyncio
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, Request, Response
+from fastapi import FastAPI, Response
 from fastapi.exceptions import RequestValidationError
 
 from lumiere.adapters.inbound.http.deps import HttpServices
-from lumiere.adapters.inbound.http.errors import failure_response, validation_failure
+from lumiere.adapters.inbound.http.errors import FailureBoundary, validation_failure
 from lumiere.adapters.inbound.http.routers.v1.guest_session import session_router
 from lumiere.adapters.inbound.http.routers.v1.people import people_router
 
 
 def create_app(services: HttpServices) -> FastAPI:
-    app = FastAPI(title="Lumiere", version="0.1.0")
+    app = FastAPI(title="Lumiere", version="0.1.0", telemetry={"tracing": False, "metrics": False, "logs": False, "operation_spans": False, "auto_configure": False})
     app.include_router(people_router(services))
     app.include_router(session_router(services))
     app.add_exception_handler(RequestValidationError, validation_failure)  # type: ignore[arg-type]
 
-    @app.middleware("http")
-    async def bounded_request(request: Request, call_next: Callable[[Request], Awaitable[Response]]) -> Response:
-        try:
-            async with asyncio.timeout(7):
-                return await call_next(request)
-        except Exception:  # noqa: BLE001 — sanitize all boundary failures before server logging
-            return failure_response()
+    app.add_middleware(FailureBoundary)
 
     @app.get("/health/live", include_in_schema=False)
     async def live() -> Response:
@@ -52,7 +45,10 @@ def create_runtime_app() -> FastAPI:
         container = build_container(settings)
     except (ValidationError, ValueError):
         raise RuntimeError("runtime configuration is invalid") from None
+    from lumiere.observability import instrument_http
+
     app = create_app(container.services)
+    instrument_http(app)
 
     @asynccontextmanager
     async def lifespan(application: FastAPI) -> AsyncIterator[None]:

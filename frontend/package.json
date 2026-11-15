@@ -17,17 +17,18 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
-    "@types/react": "~19.3.0",
-    "typescript": "~6.0.3",
-    "jest-expo": "~58.0.0",
-    "jest": "^30.0.0",
-    "@types/jest": "^30.0.0",
-    "@testing-library/react-native": "^14.0.0",
-    "react-test-renderer": "19.3.0",
     "@hey-api/openapi-ts": "latest",
+    "@testing-library/react-native": "^14.0.0",
+    "@types/jest": "^30.0.0",
+    "@types/node": "^24.19.2",
+    "@types/react": "~19.3.0",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~58.0.0",
-    "eslint-plugin-boundaries": "^7.4.1"
+    "eslint-plugin-boundaries": "^7.4.1",
+    "jest": "^30.0.0",
+    "jest-expo": "~58.0.0",
+    "react-test-renderer": "19.3.0",
+    "typescript": "~6.0.3"
   },
   "scripts": {
     "start": "expo start",

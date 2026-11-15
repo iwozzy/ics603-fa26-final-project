@@ -68,3 +68,33 @@ async def test_unhandled_session_failure_is_empty_500(api: Api) -> None:
         response = await client.get("/api/v1/people/search?query=Tom")
     assert response.status_code == 500
     assert response.content == b"" and response.headers["cache-control"] == "no-store"
+
+
+async def test_application_deadline_cancels_work(api: Api) -> None:
+    import asyncio
+    from dataclasses import replace
+    from time import monotonic
+
+    from lumiere.domain.access import GuestContext
+    from lumiere.domain.people import SearchPeopleResult
+    from lumiere.main import create_app
+
+    cancelled = asyncio.Event()
+
+    class SlowSearch:
+        async def execute(self, raw_query: str, context: GuestContext) -> SearchPeopleResult:
+            try:
+                await asyncio.sleep(9)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
+            return SearchPeopleResult(raw_query, ())
+
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(replace(api.services, search_people=SlowSearch()))), base_url="https://app.test") as client:
+        await client.post("/api/v1/guest-session")
+        start = monotonic()
+        response = await client.get("/api/v1/people/search?query=Tom")
+        assert response.status_code == 500 and response.content == b""
+        assert response.headers["cache-control"] == "no-store"
+        assert monotonic() - start < 8
+        assert cancelled.is_set()

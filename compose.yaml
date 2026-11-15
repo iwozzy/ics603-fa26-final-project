@@ -1,0 +1,52 @@
+name: lumiere
+services:
+  backend:
+    build: backend
+    environment:
+      DATABASE_URL: ${DATABASE_URL:?supply the pooled application connection}
+      TMDB_ACCESS_TOKEN: ${TMDB_ACCESS_TOKEN:?supply runtime provider authorization}
+      IP_HASH_KEY: ${IP_HASH_KEY:?supply a stable runtime IP key}
+      TRUSTED_PROXY_CIDRS: ${TRUSTED_PROXY_CIDRS:?supply ingress network CIDRs}
+      GLOBAL_REQUESTS_PER_MINUTE: ${GLOBAL_REQUESTS_PER_MINUTE:?required cap}
+      SESSION_REQUESTS_PER_MINUTE: ${SESSION_REQUESTS_PER_MINUTE:?required cap}
+      IP_REQUESTS_PER_MINUTE: ${IP_REQUESTS_PER_MINUTE:?required cap}
+      BOOTSTRAP_REQUESTS_PER_IP_PER_MINUTE: ${BOOTSTRAP_REQUESTS_PER_IP_PER_MINUTE:?required cap}
+      GLOBAL_PROVIDER_DAILY: ${GLOBAL_PROVIDER_DAILY:?required cap}
+      SESSION_PROVIDER_DAILY: ${SESSION_PROVIDER_DAILY:?required cap}
+      IP_PROVIDER_DAILY: ${IP_PROVIDER_DAILY:?required cap}
+      GLOBAL_PROVIDER_TOTAL: ${GLOBAL_PROVIDER_TOTAL:?required cap}
+      SESSION_PROVIDER_TOTAL: ${SESSION_PROVIDER_TOTAL:?required cap}
+      IP_PROVIDER_TOTAL: ${IP_PROVIDER_TOTAL:?required cap}
+      TELEMETRY_ENABLED: ${TELEMETRY_ENABLED:-false}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 5
+  web:
+    build:
+      context: frontend
+      additional_contexts:
+        ingress: deploy/caddy
+    environment:
+      SITE_ADDRESS: ${SITE_ADDRESS:-:8080}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+  postgres:
+    profiles: [local-db]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: lumiere_local
+      POSTGRES_DB: lumiere_local
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - local-data:/var/lib/postgresql
+volumes:
+  local-data:

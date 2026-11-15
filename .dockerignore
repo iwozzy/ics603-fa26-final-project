@@ -1,0 +1,10 @@
+*
+!backend/
+!backend/Dockerfile
+!frontend/
+!frontend/Dockerfile
+!e2e/
+!e2e/Dockerfile
+!deploy/
+!deploy/caddy/
+!deploy/caddy/Caddyfile*

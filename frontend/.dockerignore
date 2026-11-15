@@ -1,0 +1,10 @@
+*
+!package.json
+!package-lock.json
+!app.json
+!tsconfig.json
+!src/
+!src/**
+**/*.test.ts
+**/*.test.tsx
+src/test-utils/

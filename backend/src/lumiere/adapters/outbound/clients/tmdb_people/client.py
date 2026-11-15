@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 
 import httpx
 from pydantic import ValidationError
@@ -10,9 +11,10 @@ from lumiere.domain.people import PersonSummary
 
 
 class TMDBPeopleCatalog:
-    def __init__(self, client: httpx.AsyncClient, max_bytes: int = 1048576) -> None:
+    def __init__(self, client: httpx.AsyncClient, max_bytes: int = 1048576, report: Callable[[int, int], None] | None = None) -> None:
         self.client = client
         self.max_bytes = max_bytes
+        self.report = report
 
     async def search_first_page(self, query: str) -> tuple[PersonSummary, ...]:
         try:
@@ -35,4 +37,6 @@ class TMDBPeopleCatalog:
                 continue
             if person is not None:
                 people.append(person)
+        if self.report:
+            self.report(min(len(people), 7), len(envelope.results) - len(people))
         return tuple(people)
