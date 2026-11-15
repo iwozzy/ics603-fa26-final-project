@@ -1,2 +1,3 @@
 import { Stack } from 'expo-router';
-export default function Layout() { return <Stack screenOptions={{ headerShown: false }} />; }
+import { Providers } from '../bootstrap/Providers';
+export default function Layout() { return <Providers><Stack screenOptions={{ headerShown: false, title: 'Lumiere' }} /></Providers>; }

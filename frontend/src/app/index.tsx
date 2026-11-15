@@ -1,2 +1,2 @@
-import { View } from 'react-native';
-export default function Index() { return <View />; }
+import SearchPeopleScreen from '../adapters/inbound/ui/SearchPeopleScreen';
+export default SearchPeopleScreen;
