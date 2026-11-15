@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     tmdb_base_url: str = "https://api.themoviedb.org"
     trusted_proxy_cidrs: tuple[str, ...] = ()
     telemetry_enabled: bool = False
+    search_cache_max_age_seconds: Positive = 300
     global_requests_per_minute: Positive
     session_requests_per_minute: Positive
     ip_requests_per_minute: Positive

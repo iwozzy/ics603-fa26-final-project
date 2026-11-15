@@ -55,5 +55,5 @@ def build_container(settings: Settings) -> AppContainer:
             await connection.execute(text("SELECT 1"))
 
     policy = settings.usage_policy()
-    services = HttpServices(SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock()), GuestSessionsService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready)
+    services = HttpServices(SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock()), GuestSessionsService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds)
     return AppContainer(observe_services(services), client, engine)

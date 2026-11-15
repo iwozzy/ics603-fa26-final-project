@@ -30,12 +30,13 @@ test('test_real_browser_private_cache_reuse', async ({ page, context, request })
   expect(await counts(request)).toBe(1); expect(bootstraps).toBe(2);
 });
 
-test('test_cache_expires_after_300_seconds @cache-expiry', async ({ page, request }) => {
-  test.setTimeout(340000);
+test('test_cache_expires_after_10_seconds @cache-expiry', async ({ page, request }) => {
+  test.setTimeout(40000);
   await page.goto('/'); const first = await search(page);
-  expect(first.headers()['cache-control']).toBe('private, max-age=300');
+  expect(first.headers()['cache-control']).toBe('private, max-age=10');
   expect(await counts(request)).toBe(1);
-  for (let minute = 1; minute <= 5; minute++) { await new Promise(resolve => setTimeout(resolve, 60000)); console.log(`Cache expiry: ${minute * 60} real seconds elapsed`); }
-  await new Promise(resolve => setTimeout(resolve, 2000));
+  await search(page);
+  expect(await counts(request)).toBe(1);
+  await new Promise(resolve => setTimeout(resolve, 12000));
   await search(page); expect(await counts(request)).toBe(2);
 });

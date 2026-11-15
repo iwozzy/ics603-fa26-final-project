@@ -17,7 +17,7 @@ def people_router(services: HttpServices) -> APIRouter:
         normalized = normalize_query(query)
         context = await services.sessions.resolve(request.cookies.get(COOKIE_NAME), quota_ip_key(request, services), datetime.now(UTC))
         result = await services.search_people.execute(normalized, context)
-        response.headers["Cache-Control"] = "private, max-age=300"
+        response.headers["Cache-Control"] = f"private, max-age={services.search_cache_max_age_seconds}"
         return result
 
     return router

@@ -6,6 +6,27 @@ from tests.api.conftest import Api
 
 
 @pytest.mark.parametrize("empty", [False, True])
+@pytest.mark.parametrize("seconds", [10, 10001])
+async def test_success_uses_configured_cache_lifetime(api: Api, empty: bool, seconds: int) -> None:
+    from dataclasses import replace
+
+    from lumiere.main import create_app
+
+    if empty:
+        api.catalog.people = ()
+    app = create_app(replace(api.services, search_cache_max_age_seconds=seconds))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://app.test") as client:
+        await client.post("/api/v1/guest-session")
+        response = await client.get("/api/v1/people/search?query=Tom")
+    assert response.status_code == 200
+    assert response.headers["cache-control"] == f"private, max-age={seconds}"
+    assert "cookie" not in response.headers.get("vary", "").lower()
+    assert "set-cookie" not in response.headers
+    if empty:
+        assert response.json()["people"] == []
+
+
+@pytest.mark.parametrize("empty", [False, True])
 async def test_success_and_empty_success_headers(api: Api, empty: bool) -> None:
     await api.client.post("/api/v1/guest-session")
     if empty:

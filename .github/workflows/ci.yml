@@ -6,7 +6,7 @@ on:
   workflow_dispatch:
     inputs:
       cache_expiry:
-        description: Run the five-minute browser expiry check
+        description: Run the browser expiry check with a 10-second cache lifetime
         type: boolean
         default: false
 permissions:

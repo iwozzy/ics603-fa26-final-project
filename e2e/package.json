@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "test": "playwright test --grep-invert @cache-expiry",
-    "test:cache-expiry": "playwright test --grep @cache-expiry",
+    "test:cache-expiry": "LUMIERE_TEST_SEARCH_CACHE_MAX_AGE_SECONDS=10 playwright test --grep @cache-expiry",
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {

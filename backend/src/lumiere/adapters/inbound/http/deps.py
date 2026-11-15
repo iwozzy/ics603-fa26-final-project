@@ -12,3 +12,4 @@ class HttpServices:
     ip_hash_key: bytes
     trusted_proxy_cidrs: tuple[str, ...] = ()
     ready: Callable[[], Awaitable[None]] | None = None
+    search_cache_max_age_seconds: int = 300
