@@ -9,7 +9,7 @@ Positive = Annotated[int, Field(gt=0)]
 
 
 class Settings(BaseSettings):
-    model_config = SettingsConfigDict(env_file=None, hide_input_in_errors=True, extra="ignore")
+    model_config = SettingsConfigDict(env_prefix="LUMIERE_", env_file=None, hide_input_in_errors=True, extra="ignore")
     database_url: SecretStr
     tmdb_access_token: SecretStr
     ip_hash_key: SecretStr

@@ -16,7 +16,7 @@ def apply(connection: Connection) -> None:
 
 
 async def run() -> None:
-    url = os.environ["MIGRATION_DATABASE_URL"]
+    url = os.environ["LUMIERE_MIGRATION_DATABASE_URL"]
     if not url.startswith("postgresql+psycopg://"):
         raise RuntimeError("a direct Postgres migration connection is required")
     engine = create_async_engine(url, poolclass=NullPool, hide_parameters=True)

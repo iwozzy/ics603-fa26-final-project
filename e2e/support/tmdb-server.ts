@@ -2,7 +2,7 @@ import { createServer } from 'node:http';
 import { readFile } from 'node:fs/promises';
 
 interface Scenario { delayMs?: number; empty?: boolean; status?: number; prefix?: string; }
-const fixture = JSON.parse(await readFile(process.env.FIXTURE_PATH ?? new URL('../../docs/samples/api/tmdb/v3/search/person.json', import.meta.url), 'utf8')) as { results: { name: string; [key: string]: unknown }[] };
+const fixture = JSON.parse(await readFile(process.env.LUMIERE_TEST_FIXTURE_PATH ?? new URL('../../docs/samples/api/tmdb/v3/search/person.json', import.meta.url), 'utf8')) as { results: { name: string; [key: string]: unknown }[] };
 let scenarios: Record<string, Scenario> = {};
 let total = 0;
 let completed = 0;
