@@ -38,7 +38,7 @@ const styles = StyleSheet.create({
   content: { width: '100%', maxWidth: 880 }, headingWrap: { alignSelf: 'center', borderBottomWidth: 2, borderBottomColor: '#343941', marginBottom: 32, paddingBottom: 7 },
   heading: { fontSize: 28, fontWeight: '600', color: '#24282d' },
   field: { flexDirection: 'row', alignItems: 'center', borderWidth: 2, borderColor: '#c3c7cc', borderRadius: 16, padding: 8, minHeight: 68 },
-  focused: { borderColor: '#4279b2' }, input: { flex: 1, minWidth: 0, fontSize: 17, padding: 10, color: '#22262c' },
+  focused: { borderColor: '#4279b2' }, input: { flex: 1, minWidth: 0, fontSize: 17, padding: 10, color: '#22262c', outlineStyle: 'solid', outlineWidth: 0 },
   search: { width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center', backgroundColor: '#e3e7ec', borderWidth: 2, borderColor: 'transparent' },
   buttonFocused: { borderColor: '#4279b2' }, icon: { width: 23, height: 23 }, lens: { width: 16, height: 16, borderWidth: 2, borderColor: '#697786', borderRadius: 8 }, handle: { position: 'absolute', width: 10, height: 2, backgroundColor: '#697786', left: 13, top: 17, transform: [{ rotate: '45deg' }] },
   examples: { marginTop: 24, paddingHorizontal: 12, gap: 10 }, examplesTitle: { color: '#737b85', fontSize: 15, marginBottom: 10 }, example: { color: '#737b85', fontSize: 15, lineHeight: 23 }, results: { marginTop: 24, paddingHorizontal: 8 },
