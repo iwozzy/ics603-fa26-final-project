@@ -157,10 +157,19 @@ exporting telemetry, or contacting the provider. Generated wire types remain in
 the HTTP adapter. See [implementation evidence and acceptance review](docs/features/F001-search-people/IMPLEMENTATION.md)
 for the incremental RED/GREEN record, limitations, and manual verification.
 
-The existing dependency lockfile reports npm audit findings inherited through
-the Expo/Jest toolchain. Compatible audit fixes were applied in the foundation;
-the remaining proposed fix forces older major Expo/Jest versions and was deferred.
-This feature adds no npm dependencies.
+The frontend overrides `test-exclude` to `8.0.0` within `babel-plugin-istanbul` to
+replace the deprecated glob 7/10 copies and remove `inflight`. It also pins glob
+to `14.0.4` and overrides affected minimatch versions (`>=7.0.0 <11.0.1`) to
+`11.0.5`, addressing [glob cancellation](https://github.com/advisories/GHSA-3g3m-2fjr-6pw4)
+and [minimatch pattern amplification](https://github.com/advisories/GHSA-g3hv-75wg-m249).
+These overrides cross the parents' declared dependency ranges; when changing or
+removing them, run `npm --prefix frontend test -- --coverage` and compare coverage
+file inclusion and exclusion as well as running the ordinary checks.
+
+Remaining npm audit findings originate from unpatched `deepmerge@4.3.1`, used by
+Jest to merge configuration. See the [prototype poisoning advisory](https://github.com/advisories/GHSA-gcqx-w48m-w2h4).
+The proposed forced audit fix downgrades Jest and other major toolchain versions;
+it is not a compatible dependency update.
 
 ## Source layout
 
