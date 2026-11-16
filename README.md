@@ -29,6 +29,11 @@ use `uv --directory backend add` for Python dependencies and `npm install` insid
 `frontend` for JavaScript. Use `EXPO_NO_DOTENV=1 npx expo install <package>` for
 SDK-managed dependencies.
 
+`make setup` removes existing frontend dependencies with bounded filesystem
+retries before running `npm ci`. This handles transient `ENOTEMPTY` failures in
+npm's cleanup when repeating setup; the installed npm version does not retry
+that cleanup itself. The dependency versions still come from the lockfile.
+
 ## Run locally
 
 For live searches, supply the TMDB API Read Access Token as `LUMIERE_TMDB_TOKEN` in

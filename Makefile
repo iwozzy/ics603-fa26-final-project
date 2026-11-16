@@ -2,6 +2,7 @@
 
 setup:
 	uv --directory backend sync --locked
+#	node frontend/scripts/clean-node-modules.mjs
 	npm --prefix frontend ci
 
 api:
