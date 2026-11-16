@@ -1,6 +1,6 @@
 {
     "python.analysis.diagnosticsSource": "Pylance + Pyrefly",
-    "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
     "js/ts.tsdk.path": "frontend/node_modules/typescript/lib",
     "js/ts.tsdk.promptToUseWorkspaceVersion": true,
     "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
