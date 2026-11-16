@@ -12,28 +12,28 @@ from lumiere.domain.errors import SearchFailed
 
 POLICY = UsagePolicy(100, 100, 100, 100, 2, 2, 2, 3, 3, 3)
 NOW = datetime(2026, 11, 15, 23, 59, tzinfo=UTC)
-CONTEXT = GuestContext(uuid4(), uuid4(), "synthetic-ip")
+CONTEXT = GuestContext(uuid4(), "synthetic-ip")
 
 
 async def test_concurrent_cap_and_restart(uows: Callable[[], PostgresAccessUnitOfWork]) -> None:
     service = UsageAdmissionService(uows, POLICY)
-    results = await asyncio.gather(*(service.admit(CONTEXT, NOW) for _ in range(20)), return_exceptions=True)
+    results = await asyncio.gather(*(service.admit_and_charge(CONTEXT, NOW) for _ in range(20)), return_exceptions=True)
     assert sum(not isinstance(result, BaseException) for result in results) == 2
     assert all(not isinstance(result, BaseException) or isinstance(result, SearchFailed) for result in results)
     async with uows() as uow:
         key = CounterKey("global", "all", "people_provider", "total")
         assert (await uow.usage.lock_counters((key,)))[key] == 2
     with pytest.raises(SearchFailed):
-        await UsageAdmissionService(uows, POLICY).admit(CONTEXT, NOW)
+        await UsageAdmissionService(uows, POLICY).admit_and_charge(CONTEXT, NOW)
 
 
 async def test_utc_rollover_keeps_total_cap(uows: Callable[[], PostgresAccessUnitOfWork]) -> None:
     service = UsageAdmissionService(uows, POLICY)
-    await service.admit(CONTEXT, NOW)
-    await service.admit(CONTEXT, NOW)
-    await service.admit(CONTEXT, NOW + timedelta(minutes=2))
+    await service.admit_and_charge(CONTEXT, NOW)
+    await service.admit_and_charge(CONTEXT, NOW)
+    await service.admit_and_charge(CONTEXT, NOW + timedelta(minutes=2))
     with pytest.raises(SearchFailed):
-        await service.admit(CONTEXT, NOW + timedelta(minutes=2))
+        await service.admit_and_charge(CONTEXT, NOW + timedelta(minutes=2))
 
 
 async def test_storage_outage_blocks_dispatch() -> None:

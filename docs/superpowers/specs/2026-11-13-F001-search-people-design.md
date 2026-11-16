@@ -4,6 +4,10 @@ Date: 2026-11-13
 
 Status: Approved by the project owner on 2026-11-13, after revisions and clarifications. Details labeled author proposals were accepted with this approval; explicitly deferred decisions remain deferred.
 
+Amendment approved on 2026-11-15: [durable guest identity](2026-11-15-durable-guest-identity-design.md) supersedes expiring guest-session behavior. Guest profiles/credentials have no server expiry; successful bootstrap renews a one-year persistent cookie and quotas attach to profile identity. The compatible bootstrap endpoint and search response contract remain in place.
+
+Subsequent accounting amendment approved on 2026-11-15: [counter-only admission](2026-11-15-counter-only-admission-design.md) replaces reservation/outcome tracking. All admitted searches are charged permanently before provider dispatch. Only counters are retained, with no post-provider accounting or reservation table.
+
 ## Intent and scope
 
 Lumiere helps users find and recognize actors, directors, and other creative contributors by name, as the entry point to discovering movies through people. Deliver working web search through the Expo client, application API, and TMDB provider. Following is the next feature and receives its own design.

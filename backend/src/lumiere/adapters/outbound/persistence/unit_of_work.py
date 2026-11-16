@@ -6,17 +6,17 @@ from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from lumiere.adapters.outbound.persistence.repositories import (
-    PostgresGuestSessionRepository,
+    PostgresGuestIdentityRepository,
     PostgresUsageRepository,
 )
-from lumiere.application.ports.sessions import GuestSessionRepository
+from lumiere.application.ports.guests import GuestIdentityRepository
 from lumiere.application.ports.usage import UsageRepository
 from lumiere.domain.errors import SearchFailed
 
 
 class PostgresAccessUnitOfWork:
     usage: UsageRepository
-    sessions: GuestSessionRepository
+    guests: GuestIdentityRepository
 
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self.factory = sessions
@@ -25,7 +25,7 @@ class PostgresAccessUnitOfWork:
         self.session = self.factory()
         await self.session.begin()
         self.usage = PostgresUsageRepository(self.session)
-        self.sessions = PostgresGuestSessionRepository(self.session)
+        self.guests = PostgresGuestIdentityRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:

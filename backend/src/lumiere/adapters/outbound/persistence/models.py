@@ -1,8 +1,6 @@
-from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, DateTime, ForeignKey, LargeBinary, String
-from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -15,12 +13,11 @@ class GuestProfileRow(Base):
     id: Mapped[UUID] = mapped_column(primary_key=True)
 
 
-class GuestSessionRow(Base):
-    __tablename__ = "guest_sessions"
+class GuestCredentialRow(Base):
+    __tablename__ = "guest_credentials"
     id: Mapped[UUID] = mapped_column(primary_key=True)
     profile_id: Mapped[UUID] = mapped_column(ForeignKey("guest_profiles.id"), nullable=False)
     token_digest: Mapped[bytes] = mapped_column(LargeBinary(32), unique=True, nullable=False)
-    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
 
 class CounterRow(Base):
@@ -31,11 +28,3 @@ class CounterRow(Base):
     feature: Mapped[str] = mapped_column(String(32), primary_key=True)
     window: Mapped[str] = mapped_column(String(32), primary_key=True)
     count: Mapped[int] = mapped_column(default=0, nullable=False)
-
-
-class ReservationRow(Base):
-    __tablename__ = "usage_reservations"
-    __table_args__ = (CheckConstraint("state IN ('reserved','dispatched','success','failed','cancelled','released')", name="reservation_state"),)
-    id: Mapped[UUID] = mapped_column(primary_key=True)
-    provider_keys: Mapped[list[dict[str, str]]] = mapped_column(JSONB, nullable=False)
-    state: Mapped[str] = mapped_column(String(16), nullable=False)

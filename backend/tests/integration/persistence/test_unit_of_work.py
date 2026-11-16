@@ -35,7 +35,7 @@ async def test_uncommitted_exit_rolls_back(uows: Callable[[], PostgresAccessUnit
         # Inspect real schema, including absence of catalog/search persistence.
         tables = await uow.session.run_sync(lambda session: inspect(session.connection()).get_table_names())
         tables = [table for table in tables if table != "alembic_version"]
-        assert set(tables) == {"guest_profiles", "guest_sessions", "usage_counters", "usage_reservations"}
+        assert set(tables) == {"guest_profiles", "guest_credentials", "usage_counters"}
         assert set(Base.metadata.tables) == set(tables)
 
 

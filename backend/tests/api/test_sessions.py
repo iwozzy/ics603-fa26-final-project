@@ -16,8 +16,8 @@ async def test_session_cookie_and_reuse(api: Api, scheme: str) -> None:
         cookie = response.headers["set-cookie"].lower()
         assert "httponly" in cookie and "samesite=lax" in cookie and "path=/" in cookie
         assert ("secure" in cookie) == (scheme == "https")
-        assert "expires=" not in cookie and "max-age=" not in cookie
-        assert "set-cookie" not in (await client.post("/api/v1/guest-session")).headers
+        assert "max-age=31536000" in cookie
+        assert "max-age=31536000" in (await client.post("/api/v1/guest-session")).headers["set-cookie"].lower()
 
 
 async def test_bootstrap_origin_protection(api: Api) -> None:

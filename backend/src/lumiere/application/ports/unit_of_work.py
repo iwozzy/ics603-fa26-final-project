@@ -1,13 +1,13 @@
 from types import TracebackType
 from typing import Protocol, Self
 
-from lumiere.application.ports.sessions import GuestSessionRepository
+from lumiere.application.ports.guests import GuestIdentityRepository
 from lumiere.application.ports.usage import UsageRepository
 
 
 class AccessUnitOfWork(Protocol):
     usage: UsageRepository
-    sessions: GuestSessionRepository
+    guests: GuestIdentityRepository
 
     async def __aenter__(self) -> Self: ...
     async def __aexit__(self, exc_type: type[BaseException] | None,

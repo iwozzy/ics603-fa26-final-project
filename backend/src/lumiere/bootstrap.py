@@ -9,7 +9,7 @@ from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.adapters.outbound.clients.tmdb_people.client import TMDBPeopleCatalog
 from lumiere.adapters.outbound.persistence.session import create_sessions
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
-from lumiere.application.use_cases.guest_sessions import GuestSessionsService
+from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.config import Settings
@@ -55,5 +55,6 @@ def build_container(settings: Settings) -> AppContainer:
             await connection.execute(text("SELECT 1"))
 
     policy = settings.usage_policy()
-    services = HttpServices(SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock()), GuestSessionsService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds)
+    search = SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock())
+    services = HttpServices(search, GuestIdentityService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds)
     return AppContainer(observe_services(services), client, engine)

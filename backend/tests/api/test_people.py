@@ -75,17 +75,17 @@ async def test_unhandled_session_failure_is_empty_500(api: Api) -> None:
     from dataclasses import replace
     from datetime import datetime
 
-    from lumiere.domain.access import GuestContext, GuestSession
+    from lumiere.domain.access import GuestBootstrap, GuestContext
     from lumiere.main import create_app
 
     class BrokenSessions:
-        async def bootstrap(self, proof: str | None, ip_key: str, now: datetime) -> GuestSession:
+        async def bootstrap(self, proof: str | None, ip_key: str, now: datetime) -> GuestBootstrap:
             raise RuntimeError("synthetic")
 
         async def resolve(self, proof: str | None, ip_key: str, now: datetime) -> GuestContext:
             raise RuntimeError("synthetic")
 
-    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(replace(api.services, sessions=BrokenSessions())), raise_app_exceptions=False), base_url="https://app.test") as client:
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(replace(api.services, guests=BrokenSessions())), raise_app_exceptions=False), base_url="https://app.test") as client:
         response = await client.get("/api/v1/people/search?query=Tom")
     assert response.status_code == 500
     assert response.content == b"" and response.headers["cache-control"] == "no-store"
@@ -121,7 +121,7 @@ async def test_application_deadline_cancels_work(api: Api) -> None:
         assert cancelled.is_set()
 
 
-async def test_real_search_deadline_does_not_wait_for_slow_settlement(api: Api) -> None:
+async def test_real_search_deadline_preserves_admission_charge(api: Api) -> None:
     import asyncio
     from dataclasses import replace
     from datetime import datetime
@@ -129,51 +129,40 @@ async def test_real_search_deadline_does_not_wait_for_slow_settlement(api: Api) 
     from typing import override
 
     from lumiere.application.use_cases.search_people import SearchPeople
-    from lumiere.domain.access import AttemptOutcome, GuestContext, Reservation
+    from lumiere.domain.access import GuestContext
     from lumiere.domain.people import PersonSummary
     from lumiere.main import create_app
     from tests.fakes.search import FakeAdmission, FakeClock
 
-    settled = asyncio.Event()
-    release = asyncio.Event()
+    cancelled = asyncio.Event()
 
     class SlowAdmission(FakeAdmission):
         @override
-        async def admit(self, context: GuestContext, now: datetime) -> Reservation:
+        async def admit_and_charge(self, context: GuestContext, now: datetime) -> None:
             await asyncio.sleep(3)
-            return await super().admit(context, now)
-
-        @override
-        async def finish(self, reservation: Reservation, outcome: AttemptOutcome) -> None:
-            await release.wait()
-            await super().finish(reservation, outcome)
-            settled.set()
+            await super().admit_and_charge(context, now)
 
     class BoundedProvider:
         async def search_first_page(self, query: str) -> tuple[PersonSummary, ...]:
-            async with asyncio.timeout(5):
-                await asyncio.sleep(10)
+            try:
+                async with asyncio.timeout(5):
+                    await asyncio.sleep(10)
+            except asyncio.CancelledError:
+                cancelled.set()
+                raise
             return ()
 
     admission = SlowAdmission()
     app = create_app(replace(api.services, search_people=SearchPeople(BoundedProvider(), admission, FakeClock())))
-    # Let the old implementation settle after nine seconds, so RED finishes.
-    timer = asyncio.get_running_loop().call_later(9, release.set)
-    try:
-        async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://app.test") as client:
-            await client.post("/api/v1/guest-session")
-            start = monotonic()
-            response = await client.get("/api/v1/people/search?query=Tom")
-            elapsed = monotonic() - start
-            assert response.status_code == 500 and response.content == b""
-            assert response.headers["cache-control"] == "no-store"
-            assert elapsed < 8
-            assert admission.dispatch_count == 1 and admission.releases == 0
-    finally:
-        timer.cancel()
-        release.set()
-        await asyncio.wait_for(settled.wait(), 1)
-    assert admission.outcomes == [AttemptOutcome.CANCELLED]
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://app.test") as client:
+        await client.post("/api/v1/guest-session")
+        start = monotonic()
+        response = await client.get("/api/v1/people/search?query=Tom")
+        assert response.status_code == 500 and response.content == b""
+        assert response.headers["cache-control"] == "no-store"
+        assert monotonic() - start < 8
+        assert admission.admissions == 1
+        await asyncio.wait_for(cancelled.wait(), 1)
 
 
 async def test_http_deadline_returns_while_cancelled_dependency_cleans_up() -> None:

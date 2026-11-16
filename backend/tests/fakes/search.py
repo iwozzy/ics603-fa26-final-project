@@ -1,8 +1,6 @@
-import asyncio
 from datetime import UTC, datetime
-from uuid import uuid4
 
-from lumiere.domain.access import AttemptOutcome, GuestContext, Reservation
+from lumiere.domain.access import GuestContext
 from lumiere.domain.people import PersonSummary
 
 
@@ -25,29 +23,11 @@ class FakeCatalog:
 
 
 class FakeAdmission:
-    def __init__(self, error: Exception | None = None, mark_error: BaseException | None = None) -> None:
+    def __init__(self, error: Exception | None = None) -> None:
         self.error = error
-        self.mark_error = mark_error
         self.admissions = 0
-        self.dispatch_count = 0
-        self.releases = 0
-        self.outcomes: list[AttemptOutcome] = []
-        self.finished = asyncio.Event()
 
-    async def admit(self, context: GuestContext, now: datetime) -> Reservation:
+    async def admit_and_charge(self, context: GuestContext, now: datetime) -> None:
         if self.error:
             raise self.error
         self.admissions += 1
-        return Reservation(uuid4())
-
-    async def mark_dispatched(self, reservation: Reservation) -> None:
-        if self.mark_error:
-            raise self.mark_error
-        self.dispatch_count += 1
-
-    async def finish(self, reservation: Reservation, outcome: AttemptOutcome) -> None:
-        self.outcomes.append(outcome)
-        self.finished.set()
-
-    async def release_undispatched(self, reservation: Reservation) -> None:
-        self.releases += 1

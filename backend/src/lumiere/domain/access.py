@@ -1,32 +1,18 @@
 from dataclasses import dataclass, fields
-from datetime import datetime
-from enum import StrEnum
 from uuid import UUID
 
 
 @dataclass(frozen=True)
 class GuestContext:
     profile_id: UUID
-    session_id: UUID
     ip_key: str
 
 
 @dataclass(frozen=True)
-class Reservation:
-    id: UUID
-
-
-@dataclass(frozen=True)
-class GuestSession:
+class GuestBootstrap:
     context: GuestContext
     proof: str
     is_new: bool
-
-
-class AttemptOutcome(StrEnum):
-    SUCCESS = "success"
-    FAILED = "failed"
-    CANCELLED = "cancelled"
 
 
 @dataclass(frozen=True, order=True)
@@ -38,17 +24,8 @@ class CounterKey:
 
 
 @dataclass(frozen=True)
-class ReservationRecord:
-    id: UUID
-    provider_keys: tuple[CounterKey, ...]
-    state: str
-
-
-@dataclass(frozen=True)
-class StoredGuestSession:
+class StoredGuestIdentity:
     profile_id: UUID
-    session_id: UUID
-    expires_at: datetime
 
 
 @dataclass(frozen=True)

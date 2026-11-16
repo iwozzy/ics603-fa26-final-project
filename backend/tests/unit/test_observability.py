@@ -8,7 +8,7 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.adapters.outbound.clients.tmdb_people.client import TMDBPeopleCatalog
-from lumiere.application.use_cases.guest_sessions import GuestSessionsService
+from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.domain.access import UsagePolicy
 from lumiere.domain.errors import SearchFailed
@@ -28,7 +28,7 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     async with httpx.AsyncClient(base_url="https://provider.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "SENTINEL_PAYLOAD"}, {"id": False, "name": "invalid"}]}))) as provider:
         catalog = TMDBPeopleCatalog(provider, report=telemetry.record_catalog_counts)
         policy = UsagePolicy(100,100,100,100,100,100,100,100,100,100)
-        services = HttpServices(SearchPeople(catalog, admission, FakeClock()), GuestSessionsService(MemoryAccess(), policy), b"synthetic-key")
+        services = HttpServices(SearchPeople(catalog, admission, FakeClock()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key")
         app = create_app(telemetry.observe_services(services))
         telemetry.instrument_http(app)
         async with httpx.AsyncClient(base_url="https://app.test", transport=httpx.ASGITransport(app=app)) as client:

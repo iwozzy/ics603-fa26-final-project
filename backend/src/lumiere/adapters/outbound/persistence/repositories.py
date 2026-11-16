@@ -1,25 +1,20 @@
 from collections.abc import Mapping
 from dataclasses import asdict
-from datetime import datetime
+from uuid import UUID, uuid4
 
-from sqlalchemy import select, tuple_, update
-from sqlalchemy.dialects.postgresql import insert
+from sqlalchemy import bindparam, func, select, tuple_, update
+from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lumiere.adapters.outbound.persistence.models import (
     CounterRow,
+    GuestCredentialRow,
     GuestProfileRow,
-    GuestSessionRow,
-    ReservationRow,
 )
 from lumiere.domain.access import (
     CounterKey,
-    GuestContext,
-    Reservation,
-    ReservationRecord,
-    StoredGuestSession,
+    StoredGuestIdentity,
 )
-from lumiere.domain.errors import SearchFailed
 
 
 class PostgresUsageRepository:
@@ -39,30 +34,21 @@ class PostgresUsageRepository:
         for key in sorted(deltas):
             await self.session.execute(update(CounterRow).where(CounterRow.scope == key.scope, CounterRow.subject == key.subject, CounterRow.feature == key.feature, CounterRow.window == key.window).values(count=CounterRow.count + deltas[key]))
 
-    async def add_reservation(self, record: ReservationRecord) -> None:
-        self.session.add(ReservationRow(id=record.id, provider_keys=[asdict(key) for key in record.provider_keys], state=record.state))
-        await self.session.flush()
+    async def admit_and_charge(self, limits: Mapping[CounterKey, int]) -> bool:
+        payload = [{**asdict(key), "cap": limits[key]} for key in sorted(limits)]
+        statement = select(func.lumiere_admit_and_charge(bindparam("limits", payload, type_=JSONB)))
+        return await self.session.scalar(statement) is True
 
-    async def get_reservation_for_update(self, reservation: Reservation) -> ReservationRecord:
-        row = await self.session.scalar(select(ReservationRow).where(ReservationRow.id == reservation.id).with_for_update())
-        if row is None:
-            raise SearchFailed("reservation")
-        return ReservationRecord(row.id, tuple(CounterKey(**key) for key in row.provider_keys), row.state)
-
-    async def save_reservation(self, record: ReservationRecord) -> None:
-        await self.session.execute(update(ReservationRow).where(ReservationRow.id == record.id).values(state=record.state))
-
-
-class PostgresGuestSessionRepository:
+class PostgresGuestIdentityRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
 
-    async def find(self, token_digest: bytes, now: datetime) -> StoredGuestSession | None:
-        row = await self.session.scalar(select(GuestSessionRow).where(GuestSessionRow.token_digest == token_digest, GuestSessionRow.expires_at > now))
-        return StoredGuestSession(row.profile_id, row.id, row.expires_at) if row else None
+    async def find(self, token_digest: bytes) -> StoredGuestIdentity | None:
+        row = await self.session.scalar(select(GuestCredentialRow).where(GuestCredentialRow.token_digest == token_digest))
+        return StoredGuestIdentity(row.profile_id) if row else None
 
-    async def create(self, context: GuestContext, token_digest: bytes, expires_at: datetime) -> None:
-        self.session.add(GuestProfileRow(id=context.profile_id))
+    async def create(self, profile_id: UUID, token_digest: bytes) -> None:
+        self.session.add(GuestProfileRow(id=profile_id))
         await self.session.flush()
-        self.session.add(GuestSessionRow(id=context.session_id, profile_id=context.profile_id, token_digest=token_digest, expires_at=expires_at))
+        self.session.add(GuestCredentialRow(id=uuid4(), profile_id=profile_id, token_digest=token_digest))
         await self.session.flush()
