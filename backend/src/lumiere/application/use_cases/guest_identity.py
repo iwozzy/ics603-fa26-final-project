@@ -4,8 +4,8 @@ from datetime import datetime
 from uuid import uuid4
 
 from lumiere.application.guest_cache import GuestIdentityCache
+from lumiere.application.minute_limits import MinuteLimiter, minute_window
 from lumiere.application.ports.unit_of_work import UnitOfWorkFactory
-from lumiere.application.use_cases.usage_admission import minute_window
 from lumiere.domain.access import (
     CounterKey,
     GuestBootstrap,
@@ -21,18 +21,16 @@ def proof_digest(proof: str) -> bytes:
 
 
 class GuestIdentityService:
-    def __init__(self, uow_factory: UnitOfWorkFactory, policy: UsagePolicy, *, cache: GuestIdentityCache | None = None) -> None:
+    def __init__(self, uow_factory: UnitOfWorkFactory, policy: UsagePolicy, *, cache: GuestIdentityCache | None = None, minute_limiter: MinuteLimiter | None = None) -> None:
         self.uow_factory = uow_factory
         self.policy = policy
         self.cache = cache if cache is not None else GuestIdentityCache()
+        self.minutes = minute_limiter if minute_limiter is not None else MinuteLimiter()
 
     async def bootstrap(self, proof: str | None, ip_key: str, now: datetime) -> GuestBootstrap:
+        key = CounterKey("ip", ip_key, "guest_bootstrap", minute_window(now))
+        self.minutes.admit({key: self.policy.bootstrap_requests_per_ip_per_minute}, now, "bootstrap_quota")
         async with self.uow_factory() as uow:
-            key = CounterKey("ip", ip_key, "guest_bootstrap", minute_window(now))
-            counts = await uow.usage.lock_counters((key,))
-            if counts[key] >= self.policy.bootstrap_requests_per_ip_per_minute:
-                raise SearchFailed("bootstrap_quota")
-            await uow.usage.add_counts({key: 1})
             stored = await uow.guests.find(proof_digest(proof)) if proof else None
             if stored is not None and proof is not None:
                 result = GuestBootstrap(GuestContext(stored.profile_id, ip_key), proof, False)

@@ -1,74 +1,15 @@
-import asyncio
 from dataclasses import replace
 from datetime import UTC, datetime, timedelta
-from uuid import uuid4
 
 import pytest
 
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
-from lumiere.application.use_cases.search_people import SearchPeople
-from lumiere.application.use_cases.usage_admission import UsageAdmissionService
-from lumiere.domain.access import GuestContext, UsagePolicy
+from lumiere.domain.access import UsagePolicy
 from lumiere.domain.errors import SearchFailed
-from lumiere.domain.people import PersonSummary
 from tests.fakes.access import MemoryAccess
-from tests.fakes.search import FakeClock
 
 NOW = datetime(2026, 11, 15, 23, 59, tzinfo=UTC)
 POLICY = UsagePolicy(100, 100, 100, 100, 2, 2, 2, 3, 3, 3)
-CONTEXT = GuestContext(uuid4(), "synthetic-ip")
-
-
-async def test_admission_commits_before_provider_and_rolls_back_failure() -> None:
-    store = MemoryAccess()
-    service = UsageAdmissionService(store, POLICY)
-    await service.admit_and_charge(CONTEXT, NOW)
-    assert store.commits == 1
-    await service.admit_and_charge(CONTEXT, NOW)
-    before = store.counts.copy()
-    with pytest.raises(SearchFailed):
-        await service.admit_and_charge(CONTEXT, NOW)
-    assert store.counts == before
-    assert store.rollbacks == 1
-
-    class Catalog:
-        async def search_first_page(self, query: str) -> tuple[PersonSummary, ...]:
-            assert not store.active
-            return ()
-
-    await SearchPeople(Catalog(), UsageAdmissionService(store, replace(POLICY, global_provider_daily=10, session_provider_daily=10, ip_provider_daily=10)), FakeClock()).execute("Tom", CONTEXT)
-
-
-async def test_charged_attempt_survives_without_outcome() -> None:
-    store = MemoryAccess()
-    await UsageAdmissionService(store, POLICY).admit_and_charge(CONTEXT, NOW)
-    assert set(store.counts.values()) == {1}
-    # A new service must retain the charge even when no dispatch outcome exists.
-    await UsageAdmissionService(store, POLICY).admit_and_charge(CONTEXT, NOW)
-    with pytest.raises(SearchFailed, match="quota"):
-        await UsageAdmissionService(store, POLICY).admit_and_charge(CONTEXT, NOW)
-    assert set(store.counts.values()) == {2}
-
-
-async def test_concurrent_cap_and_utc_rollover_keeps_total_cap() -> None:
-    store = MemoryAccess()
-    service = UsageAdmissionService(store, POLICY)
-    results = await asyncio.gather(*(service.admit_and_charge(CONTEXT, NOW) for _ in range(20)), return_exceptions=True)
-    assert sum(not isinstance(result, BaseException) for result in results) == 2
-    await service.admit_and_charge(CONTEXT, NOW + timedelta(days=1))
-    with pytest.raises(SearchFailed):
-        await UsageAdmissionService(store, POLICY).admit_and_charge(CONTEXT, NOW + timedelta(days=1))
-
-
-@pytest.mark.parametrize("field", ["global_requests_per_minute", "session_requests_per_minute", "ip_requests_per_minute", "global_provider_daily", "session_provider_daily", "ip_provider_daily", "global_provider_total", "session_provider_total", "ip_provider_total"])
-async def test_each_scope_is_enforced_atomically(field: str) -> None:
-    store = MemoryAccess()
-    service = UsageAdmissionService(store, replace(POLICY, **{field: 1}))
-    await service.admit_and_charge(CONTEXT, NOW)
-    counts = store.counts.copy()
-    with pytest.raises(SearchFailed):
-        await service.admit_and_charge(CONTEXT, NOW)
-    assert store.counts == counts
 
 
 async def test_identity_persists_and_uses_current_ip() -> None:

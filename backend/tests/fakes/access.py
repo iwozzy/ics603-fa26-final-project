@@ -21,6 +21,7 @@ class MemoryAccess:
         self.commits = 0
         self.rollbacks = 0
         self.active = False
+        self.flush_sequences: dict[UUID, int] = {}
 
     def __call__(self) -> "MemoryUow":
         return MemoryUow(self)
@@ -36,7 +37,7 @@ class MemoryUow:
     async def __aenter__(self) -> Self:
         await self.store.lock.acquire()
         self.store.active = True
-        self.snapshot = deepcopy((self.store.counts, self.store.tokens))
+        self.snapshot = deepcopy((self.store.counts, self.store.tokens, self.store.flush_sequences))
         return self
 
     async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
@@ -50,11 +51,23 @@ class MemoryUow:
         self.store.commits += 1
 
     async def rollback(self) -> None:
-        self.store.counts, self.store.tokens = self.snapshot
+        self.store.counts, self.store.tokens, self.store.flush_sequences = self.snapshot
         self.store.rollbacks += 1
 
     async def lock_counters(self, keys: tuple[CounterKey, ...]) -> dict[CounterKey, int]:
         return {key: self.store.counts.get(key, 0) for key in keys}
+
+    async def load_counts(self, day: str) -> dict[CounterKey, int]:
+        return {key: count for key, count in self.store.counts.items() if key.feature == "people_provider" and key.window in ("total", day)}
+
+    async def flush_charges(self, writer_id: UUID, sequence: int, deltas: Mapping[CounterKey, int]) -> dict[CounterKey, int]:
+        previous = self.store.flush_sequences.get(writer_id, 0)
+        if previous == sequence - 1:
+            await self.add_counts(deltas)
+            self.store.flush_sequences[writer_id] = sequence
+        elif previous != sequence:
+            raise ValueError("usage batch out of sequence")
+        return {key: self.store.counts[key] for key in deltas}
 
     async def add_counts(self, deltas: Mapping[CounterKey, int]) -> None:
         for key, delta in deltas.items():

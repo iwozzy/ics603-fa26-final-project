@@ -12,9 +12,9 @@ from sqlalchemy import Connection, text
 
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
-from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.domain.access import UsagePolicy
 from lumiere.domain.errors import SearchFailed
+from tests.fakes.accounting import running_accounting
 
 NOW = datetime(2026, 11, 15, tzinfo=UTC)
 POLICY = UsagePolicy(100, 100, 100, 100, 100, 100, 100, 100, 5, 100)
@@ -66,8 +66,9 @@ async def test_durable_migration_preserves_profiles_proofs_and_aggregate_usage(u
     for proof in proofs[:2]:
         context = await guests.resolve(proof, "synthetic-ip-new", NOW + timedelta(days=365))
         assert context.profile_id == first_profile
-        with pytest.raises(SearchFailed, match="quota"):
-            await UsageAdmissionService(uows, POLICY).admit_and_charge(context, NOW + timedelta(days=365))
+        async with running_accounting(uows, POLICY, NOW + timedelta(days=365)) as admission:
+            with pytest.raises(SearchFailed, match="quota"):
+                await admission.admit_and_charge(context, NOW + timedelta(days=365))
     returning = await guests.bootstrap(proofs[2], "synthetic-ip-new", NOW + timedelta(days=365))
     assert returning.context.profile_id == second_profile
     assert returning.proof == proofs[2]

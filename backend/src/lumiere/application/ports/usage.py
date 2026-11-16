@@ -1,6 +1,7 @@
 from collections.abc import Mapping
 from datetime import datetime
 from typing import Protocol
+from uuid import UUID
 
 from lumiere.domain.access import CounterKey, GuestContext
 
@@ -10,6 +11,8 @@ class UsageAdmission(Protocol):
 
 
 class UsageRepository(Protocol):
+    async def load_counts(self, day: str) -> dict[CounterKey, int]: ...
+    async def flush_charges(self, writer_id: UUID, sequence: int, deltas: Mapping[CounterKey, int]) -> dict[CounterKey, int]: ...
     async def lock_counters(self, keys: tuple[CounterKey, ...]) -> dict[CounterKey, int]: ...
     async def add_counts(self, deltas: Mapping[CounterKey, int]) -> None: ...
     async def admit_and_charge(self, limits: Mapping[CounterKey, int]) -> bool: ...

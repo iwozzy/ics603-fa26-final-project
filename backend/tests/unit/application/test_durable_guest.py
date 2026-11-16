@@ -41,10 +41,12 @@ async def test_cookie_renewal_does_not_reset_guest_total_budget() -> None:
     policy = replace(POLICY, session_provider_total=1)
     guests = GuestIdentityService(access, policy)
     admission = UsageAdmissionService(access, policy)
+    await admission.start(NOW)
     first = await guests.bootstrap(None, "ip-a", NOW)
     await admission.admit_and_charge(first.context, NOW)
     later = NOW + timedelta(days=2)
     returning = await guests.bootstrap(first.proof, "ip-b", later)
     with pytest.raises(SearchFailed, match="quota"):
         await admission.admit_and_charge(returning.context, later)
+    await admission.close()
     assert access.counts[CounterKey("guest", str(first.context.profile_id), "people_provider", "total")] == 1

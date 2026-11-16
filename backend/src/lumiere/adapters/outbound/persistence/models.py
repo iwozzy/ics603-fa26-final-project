@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import CheckConstraint, ForeignKey, LargeBinary, String
+from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, LargeBinary, String
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -28,3 +28,10 @@ class CounterRow(Base):
     feature: Mapped[str] = mapped_column(String(32), primary_key=True)
     window: Mapped[str] = mapped_column(String(32), primary_key=True)
     count: Mapped[int] = mapped_column(default=0, nullable=False)
+
+
+class UsageFlushCheckpointRow(Base):
+    __tablename__ = "usage_flush_checkpoints"
+    __table_args__ = (CheckConstraint("sequence >= 0", name="nonnegative_flush_sequence"),)
+    writer_id: Mapped[UUID] = mapped_column(primary_key=True)
+    sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)

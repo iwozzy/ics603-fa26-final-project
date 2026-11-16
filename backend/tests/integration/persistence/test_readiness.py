@@ -19,6 +19,7 @@ async def test_readiness_uses_database_without_provider(uows: Callable[[], Postg
 
     container.client.event_hooks["request"].append(record)
     try:
+        await container.startup()
         async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(container.services)), base_url="http://app.test") as client:
             assert (await client.get("/health/live")).status_code == 200
             assert (await client.get("/health/ready")).status_code == 200

@@ -1,5 +1,6 @@
-from collections.abc import Mapping
+from collections.abc import Mapping, Sequence
 from dataclasses import asdict
+from datetime import date
 from uuid import UUID, uuid4
 
 from sqlalchemy import bindparam, func, select, tuple_, update
@@ -10,6 +11,7 @@ from lumiere.adapters.outbound.persistence.models import (
     CounterRow,
     GuestCredentialRow,
     GuestProfileRow,
+    UsageFlushCheckpointRow,
 )
 from lumiere.domain.access import (
     CounterKey,
@@ -20,6 +22,34 @@ from lumiere.domain.access import (
 class PostgresUsageRepository:
     def __init__(self, session: AsyncSession) -> None:
         self.session = session
+
+    async def load_counts(self, day: str) -> dict[CounterKey, int]:
+        rows = (await self.session.scalars(select(CounterRow).where(CounterRow.feature == "people_provider", CounterRow.window.in_(("total", day))))).all()
+        return self._counts(rows)
+
+    async def flush_charges(self, writer_id: UUID, sequence: int, deltas: Mapping[CounterKey, int]) -> dict[CounterKey, int]:
+        if sequence < 1 or not deltas or any(delta <= 0 or key.feature != "people_provider" for key, delta in deltas.items()):
+            raise ValueError("invalid usage batch")
+        for key in deltas:
+            if key.window != "total":
+                date.fromisoformat(key.window)
+        await self.session.execute(insert(UsageFlushCheckpointRow).values(writer_id=writer_id, sequence=0).on_conflict_do_nothing())
+        checkpoint = await self.session.scalar(select(UsageFlushCheckpointRow).where(UsageFlushCheckpointRow.writer_id == writer_id).with_for_update())
+        assert checkpoint is not None
+        if checkpoint.sequence == sequence:
+            columns = (CounterRow.scope, CounterRow.subject, CounterRow.feature, CounterRow.window)
+            rows = (await self.session.scalars(select(CounterRow).where(tuple_(*columns).in_([(key.scope, key.subject, key.feature, key.window) for key in sorted(deltas)])))).all()
+        elif checkpoint.sequence == sequence - 1:
+            statement = insert(CounterRow).values([{**asdict(key), "count": deltas[key]} for key in sorted(deltas)])
+            rows = (await self.session.scalars(statement.on_conflict_do_update(index_elements=[CounterRow.scope, CounterRow.subject, CounterRow.feature, CounterRow.window], set_={"count": CounterRow.count + statement.excluded.count}).returning(CounterRow))).all()
+            checkpoint.sequence = sequence
+        else:
+            raise ValueError("usage batch out of sequence")
+        return self._counts(rows)
+
+    @staticmethod
+    def _counts(rows: Sequence[CounterRow]) -> dict[CounterKey, int]:
+        return {CounterKey(row.scope, row.subject, row.feature, row.window): row.count for row in rows}
 
     async def lock_counters(self, keys: tuple[CounterKey, ...]) -> dict[CounterKey, int]:
         ordered = sorted(set(keys))

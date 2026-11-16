@@ -32,13 +32,19 @@ class AppContainer:
     services: HttpServices
     client: httpx.AsyncClient
     engine: AsyncEngine
+    admission: UsageAdmissionService
 
     async def startup(self) -> None:
-        pass
+        await self.admission.start(SystemClock().now())
 
     async def close(self) -> None:
-        await self.client.aclose()
-        await self.engine.dispose()
+        try:
+            await self.admission.close()
+        finally:
+            try:
+                await self.client.aclose()
+            finally:
+                await self.engine.dispose()
 
 
 def build_container(settings: Settings) -> AppContainer:
@@ -51,10 +57,12 @@ def build_container(settings: Settings) -> AppContainer:
         return PostgresAccessUnitOfWork(sessions)
 
     async def ready() -> None:
+        admission.check_ready()
         async with engine.connect() as connection:
             await connection.execute(text("SELECT 1"))
 
     policy = settings.usage_policy()
-    search = SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), UsageAdmissionService(uows, policy), SystemClock())
+    admission = UsageAdmissionService(uows, policy)
+    search = SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), admission, SystemClock())
     services = HttpServices(search, GuestIdentityService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds)
-    return AppContainer(observe_services(services), client, engine)
+    return AppContainer(observe_services(services), client, engine, admission)

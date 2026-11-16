@@ -14,7 +14,7 @@ class SearchPeople:
 
     async def execute(self, raw_query: str, context: GuestContext) -> SearchPeopleResult:
         query = normalize_query(raw_query)
-        # Admission commits a nonrefundable charge before any provider I/O.
+        # Admission charges locally and queues persistence before provider I/O.
         await self.admission.admit_and_charge(context, self.clock.now())
         try:
             candidates = await self.catalog.search_first_page(query)

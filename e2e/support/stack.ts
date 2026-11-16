@@ -10,8 +10,10 @@ async function compose(args: string[]) {
 }
 export default async function setup() {
   try {
-    await compose(['up', '-d', '--build', '--wait', 'postgres', 'tmdb', 'backend', 'web']);
+    await compose(['up', '-d', '--build', '--wait', 'postgres', 'tmdb']);
+    await compose(['build', 'backend', 'web']);
     await compose(['run', '--rm', '--no-deps', 'backend', 'alembic', 'upgrade', 'head']);
+    await compose(['up', '-d', '--wait', 'backend', 'web']);
   } catch (error) { await compose(['down', '--volumes', '--remove-orphans']); throw error; }
   return async () => { await compose(['down', '--volumes', '--remove-orphans']); };
 }
