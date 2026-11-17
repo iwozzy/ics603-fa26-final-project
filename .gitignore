@@ -5,8 +5,10 @@ __pycache__/
 .venv
 
 #
-**/.env
-**/.DS_Store
+.env
+.env.*
+!.env.example
+.DS_Store
 .ruff_cache/
 .pytest_cache/
 .pyrefly_cache/

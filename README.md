@@ -66,6 +66,29 @@ records, `Long` supplies long strings, and `Latest` returns a distinct result.
 is always off in this fixture server. See the
 [manual verification workflow](docs/features/F001-search-people/IMPLEMENTATION.md#manual-verification).
 
+## Docker deployment
+
+Install Docker Engine or Docker Desktop with Compose v2 or later. Supply runtime
+configuration through the process environment, as with local development, then run:
+
+```sh
+make docker-up
+```
+
+Open <http://localhost:8080>. This builds the production API and web images, starts
+both services, and waits for their health checks. Nginx serves the exported Expo
+app and proxies `/api/` and `/health` to the internal FastAPI service. Browser API
+requests use the same origin, so the images work across deployment hostnames.
+
+```sh
+make docker-check  # Requires frontend dependencies and Playwright Chromium.
+make docker-down
+```
+
+See [Docker deployment](docs/DEPLOYMENT.md) for runtime options, registry-based
+deployment, health checks, and TLS configuration. GitHub Actions builds the images
+and runs the production-container browser smoke tests.
+
 ## API
 
 ```sh

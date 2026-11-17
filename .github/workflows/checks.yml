@@ -31,3 +31,27 @@ jobs:
       - run: npx --no-install playwright install --with-deps chromium
         working-directory: frontend
       - run: make check
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_DISABLE_ENV_FILE: '1'
+      LUMIERE_TELEMETRY_ENABLED: 'false'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'frontend/.node-version'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npx --no-install playwright install --with-deps chromium
+        working-directory: frontend
+      - run: make docker-up
+      - run: make docker-check
+      - if: failure()
+        run: docker compose --env-file /dev/null -f compose.yaml logs --no-color
+      - if: always()
+        run: make docker-down

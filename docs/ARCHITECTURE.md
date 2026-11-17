@@ -20,6 +20,12 @@ Use one repository containing an Expo frontend in `frontend/` and an async Pytho
 
 Clients initially require an internet connection. Mobile builds, authentication, hosting selection, and detailed feature behavior remain separate increments.
 
+The current web slice supports Docker deployment as separate API and static-web
+images. Nginx serves the Expo export and proxies same-origin API requests to
+FastAPI over the internal container network. Compose defines runtime configuration
+and health-based startup; TLS termination and hosting selection remain deployment
+environment decisions. See [Docker deployment](DEPLOYMENT.md).
+
 ## Application boundaries and interfaces
 
 **Backend**

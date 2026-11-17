@@ -17,6 +17,7 @@
     "typecheck": "tsc --noEmit",
     "test": "EXPO_NO_DOTENV=1 EXPO_NO_TELEMETRY=1 jest --ci --runInBand",
     "test:e2e": "playwright test",
+    "test:docker": "playwright test --config playwright.docker.config.ts",
     "api:generate": "node scripts/generate-api.mjs",
     "api:check": "node scripts/generate-api.mjs --check",
     "boundaries:check": "node scripts/check-boundaries.mjs",

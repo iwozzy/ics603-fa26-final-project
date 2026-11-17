@@ -1,4 +1,7 @@
-.PHONY: setup api fixture-api web check check-backend check-frontend test-e2e api-types smoke-logfire
+.PHONY: setup api fixture-api web check check-backend check-frontend test-e2e api-types smoke-logfire docker-build docker-up docker-down docker-check
+
+# Keep Compose configuration limited to the process environment.
+DOCKER_COMPOSE = docker compose --env-file /dev/null -f compose.yaml
 
 setup:
 	uv --directory backend sync --locked
@@ -36,3 +39,16 @@ test-e2e:
 
 api-types:
 	npm --prefix frontend run api:generate
+
+docker-build:
+	$(DOCKER_COMPOSE) build --pull
+
+docker-up:
+	$(DOCKER_COMPOSE) up --detach --build --wait --wait-timeout 120
+
+docker-down:
+	$(DOCKER_COMPOSE) down
+
+docker-check:
+	$(DOCKER_COMPOSE) config --quiet
+	npm --prefix frontend run test:docker
