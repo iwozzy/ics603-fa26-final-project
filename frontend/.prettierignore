@@ -1,0 +1,11 @@
+node_modules/
+**/.env*
+.expo/
+expo-env.d.ts
+dist/
+coverage/
+playwright-report/
+test-results/
+package-lock.json
+src/adapters/http/generated/
+src/uniwind-types.d.ts

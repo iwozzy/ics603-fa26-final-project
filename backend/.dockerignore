@@ -1,0 +1,9 @@
+**
+!pyproject.toml
+!uv.lock
+!.python-version
+!src/
+!src/**
+**/.env
+**/.env.*
+**/__pycache__/

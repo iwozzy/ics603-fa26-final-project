@@ -1,0 +1,57 @@
+name: Checks
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  search-people:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      LUMIERE_TELEMETRY_ENABLED: 'false'
+      EXPO_NO_DOTENV: '1'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v6
+        with:
+          version: '0.13.7'
+          enable-cache: true
+          cache-dependency-glob: backend/uv.lock
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'frontend/.node-version'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: make setup
+      - run: npx --no-install playwright install --with-deps chromium
+        working-directory: frontend
+      - run: make check
+
+  docker:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      COMPOSE_DISABLE_ENV_FILE: '1'
+      LUMIERE_TELEMETRY_ENABLED: 'false'
+      CI: '1'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: 'frontend/.node-version'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npx --no-install playwright install --with-deps chromium
+        working-directory: frontend
+      - run: make docker-up
+      - run: make docker-check
+      - if: failure()
+        run: docker compose --env-file /dev/null -f compose.yaml logs --no-color
+      - if: always()
+        run: make docker-down

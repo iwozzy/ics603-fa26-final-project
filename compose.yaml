@@ -1,0 +1,48 @@
+name: lumiere
+
+services:
+  api:
+    image: ${LUMIERE_IMAGE_REGISTRY:-docker.io}/${LUMIERE_IMAGE_PREFIX:-lumiere/codex}-api:${LUMIERE_IMAGE_TAG:-latest}${LUMIERE_IMAGE_ARCH_SUFFIX}
+    build:
+      context: ./backend
+    environment:
+      LUMIERE_TMDB_TOKEN: ${LUMIERE_TMDB_TOKEN:-}
+      LUMIERE_LOG_LEVEL: ${LUMIERE_LOG_LEVEL:-INFO}
+      LUMIERE_CORS_ORIGINS: ${LUMIERE_CORS_ORIGINS:-[]}
+      LUMIERE_TELEMETRY_ENABLED: ${LUMIERE_TELEMETRY_ENABLED:-false}
+      LOGFIRE_TOKEN: ${LOGFIRE_TOKEN:-}
+      LOGFIRE_ENVIRONMENT: ${LOGFIRE_ENVIRONMENT:-}
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      interval: 5s
+      start_period: 5s
+
+  web:
+    image: ${LUMIERE_IMAGE_REGISTRY:-docker.io}/${LUMIERE_IMAGE_PREFIX:-lumiere/codex}-web:${LUMIERE_IMAGE_TAG:-latest}${LUMIERE_IMAGE_ARCH_SUFFIX}
+    build:
+      context: ./frontend
+    ports:
+      - "${LUMIERE_BIND_ADDRESS:-127.0.0.1}:${LUMIERE_WEB_PORT:-8080}:8080"
+    depends_on:
+      api:
+        condition: service_healthy
+    init: true
+    restart: unless-stopped
+    read_only: true
+    tmpfs:
+      - /tmp
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    healthcheck:
+      interval: 5s
+      start_period: 5s

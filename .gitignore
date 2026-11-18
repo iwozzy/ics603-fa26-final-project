@@ -5,5 +5,21 @@ __pycache__/
 .venv
 
 #
-**/.env
-**/.DS_Store
+.env
+.env.*
+!.env.example
+.DS_Store
+.ruff_cache/
+.pytest_cache/
+.pyrefly_cache/
+.coverage
+htmlcov/
+.import_linter_cache/
+.logfire/
+**/node_modules/
+frontend/.expo/
+frontend/expo-env.d.ts
+frontend/dist/
+frontend/coverage/
+frontend/playwright-report/
+frontend/test-results/

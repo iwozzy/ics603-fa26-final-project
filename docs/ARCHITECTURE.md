@@ -4,11 +4,11 @@
 
 Build the full product described in the proposal and wireframes through small, independently developed feature increments.
 
-Use one repository containing an Expo frontend and an async Python backend. Apply ports and adapters to both. Begin with personal use and one seeded user, while keeping all user-owned data and application operations ready for multiple users.
+Use one repository containing an Expo frontend in `frontend/` and an async Python backend in `backend/`. Apply ports and adapters to both. Begin with personal use and one seeded user, while keeping all user-owned data and application operations ready for multiple users.
 
 | Area | Technology |
 |---|---|
-| Frontend | TypeScript, Expo, React Native Web; web first |
+| Frontend | TypeScript, Expo, Expo Router, React Native Web; web first |
 | Backend HTTP | FastAPI |
 | Boundary validation | Pydantic |
 | Persistence | Async SQLAlchemy, Postgres hosted on Neon |
@@ -19,6 +19,12 @@ Use one repository containing an Expo frontend and an async Python backend. Appl
 | Semantic search | Implementation selected through a later investigation |
 
 Clients initially require an internet connection. Mobile builds, authentication, hosting selection, and detailed feature behavior remain separate increments.
+
+The current web slice supports Docker deployment as separate API and static-web
+images. Nginx serves the Expo export and proxies same-origin API requests to
+FastAPI over the internal container network. Compose defines runtime configuration
+and health-based startup; TLS termination and hosting selection remain deployment
+environment decisions. See [Docker deployment](DEPLOYMENT.md).
 
 ## Application boundaries and interfaces
 
@@ -35,6 +41,7 @@ Clients initially require an internet connection. Mobile builds, authentication,
 
 - Keep application behavior and ports in TypeScript modules independent of React, Expo, and browser APIs.
 - Implement the UI, backend communication, and device capabilities as adapters.
+- Use Expo Router for file-based navigation. Keep route modules and the root layout in `frontend/src/app/`, with feature behavior in application modules and screen components in UI adapters.
 - Share cross-platform components where useful; allow web/native variants for navigation, layout, and interactions.
 - Use REST/JSON and OpenAPI for backend communication. Generate frontend wire types from the API schema; keep generated transport code outside the frontend core.
 - Add abstractions as features need them, rather than scaffolding unused services or mobile implementations.
