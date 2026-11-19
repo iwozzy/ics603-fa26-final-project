@@ -1,0 +1,105 @@
+{
+  "$defs": {
+    "PersonResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "provider_ref": {
+          "$ref": "#/$defs/ProviderRefResponse"
+        },
+        "name": {
+          "minLength": 1,
+          "pattern": "\\S",
+          "title": "Name",
+          "type": "string"
+        },
+        "portrait_url": {
+          "anyOf": [
+            {
+              "pattern": "^https://image\\.tmdb\\.org/t/p/w180_and_h180_face/[A-Za-z0-9_-]+\\.[A-Za-z0-9]+$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Portrait Url"
+        },
+        "department": {
+          "anyOf": [
+            {
+              "minLength": 1,
+              "pattern": "\\S",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "title": "Department"
+        },
+        "known_for": {
+          "items": {
+            "minLength": 1,
+            "pattern": "\\S",
+            "type": "string"
+          },
+          "maxItems": 3,
+          "title": "Known For",
+          "type": "array"
+        }
+      },
+      "required": [
+        "provider_ref",
+        "name",
+        "portrait_url",
+        "department",
+        "known_for"
+      ],
+      "title": "PersonResponse",
+      "type": "object"
+    },
+    "ProviderRefResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "provider": {
+          "const": "tmdb",
+          "title": "Provider",
+          "type": "string"
+        },
+        "entity_type": {
+          "const": "person",
+          "title": "Entity Type",
+          "type": "string"
+        },
+        "id": {
+          "pattern": "^[1-9][0-9]*$",
+          "title": "Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "provider",
+        "entity_type",
+        "id"
+      ],
+      "title": "ProviderRefResponse",
+      "type": "object"
+    }
+  },
+  "additionalProperties": false,
+  "properties": {
+    "results": {
+      "items": {
+        "$ref": "#/$defs/PersonResponse"
+      },
+      "maxItems": 7,
+      "title": "Results",
+      "type": "array"
+    }
+  },
+  "required": [
+    "results"
+  ],
+  "title": "SearchResponse",
+  "type": "object"
+}

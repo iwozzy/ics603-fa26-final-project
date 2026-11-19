@@ -1,9 +1,5 @@
-# Python-generated files
-__pycache__/
-
-# Virtual environments
-.venv
-
-#
+# Shared local configuration and OS files
 **/.env
 **/.DS_Store
+.env.*
+!.env.example
