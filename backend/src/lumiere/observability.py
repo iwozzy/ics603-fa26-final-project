@@ -1,4 +1,4 @@
-"""Explicit boundary spans. No request URLs, content, SQL text, or exceptions."""
+"""Explicit boundary spans. No request URLs, content, SQL parameters, or exceptions."""
 import os
 from collections.abc import Iterator
 from contextlib import contextmanager
@@ -23,7 +23,7 @@ from lumiere.domain.errors import SearchFailed
 from lumiere.domain.people import SearchPeopleResult
 
 _enabled = False
-_ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id"}
+_ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text"}
 _CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled"}
 
 
@@ -147,7 +147,8 @@ def instrument_database(engine: Engine) -> None:
 
     def before(connection: Connection, cursor: object, statement: str, parameters: object, context: ExecutionContext, executemany: bool) -> None:
         manager = safe_span("database.query")
-        manager.__enter__()
+        attributes = manager.__enter__()
+        attributes["db.query.text"] = statement
         spans[id(context)] = manager
 
     def after(connection: Connection, cursor: object, statement: str, parameters: object, context: ExecutionContext, executemany: bool) -> None:

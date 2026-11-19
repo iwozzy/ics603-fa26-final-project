@@ -52,8 +52,10 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     telemetry.configure_observability(False)
 
 
-def test_database_spans_omit_sql_parameters_and_connection(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize("fails", [False, True])
+def test_database_spans_capture_sql_without_parameters_or_connection(monkeypatch: pytest.MonkeyPatch, fails: bool) -> None:
     from sqlalchemy import create_engine, text
+    from sqlalchemy.exc import OperationalError
 
     import lumiere.observability as telemetry
 
@@ -63,12 +65,18 @@ def test_database_spans_omit_sql_parameters_and_connection(monkeypatch: pytest.M
     telemetry.configure_observability(True)
     engine = create_engine("sqlite:///:memory:", hide_parameters=True)
     telemetry.instrument_database(engine)
+    statement = "SELECT :value FROM missing_table" if fails else "SELECT :value"
     with engine.connect() as connection:
-        assert connection.scalar(text("SELECT :value"), {"value": "SENTINEL_SQL"}) == "SENTINEL_SQL"
+        if fails:
+            with pytest.raises(OperationalError):
+                connection.scalar(text(statement), {"value": "SENTINEL_SQL"})
+        else:
+            assert connection.scalar(text(statement), {"value": "SENTINEL_SQL"}) == "SENTINEL_SQL"
     spans = exporter.get_finished_spans()
     serialized = json.dumps([dict(span.attributes or {}) for span in spans])
-    assert any(span.name == "database.query" for span in spans)
-    assert "SENTINEL_SQL" not in serialized and "SELECT" not in serialized and "sqlite:" not in serialized
+    expected_sql = "SELECT ? FROM missing_table" if fails else "SELECT ?"
+    assert any(span.name == "database.query" and (span.attributes or {}).get("db.query.text") == expected_sql for span in spans)
+    assert "SENTINEL_SQL" not in serialized and "sqlite:" not in serialized
     engine.dispose()
     telemetry.configure_observability(False)
 
