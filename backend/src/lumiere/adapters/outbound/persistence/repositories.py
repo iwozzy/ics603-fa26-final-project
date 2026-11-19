@@ -3,7 +3,7 @@ from dataclasses import asdict
 from datetime import date
 from uuid import UUID, uuid4
 
-from sqlalchemy import bindparam, func, select, tuple_, update
+from sqlalchemy import BigInteger, Uuid, bindparam, func, select, tuple_, update
 from sqlalchemy.dialects.postgresql import JSONB, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -11,7 +11,6 @@ from lumiere.adapters.outbound.persistence.models import (
     CounterRow,
     GuestCredentialRow,
     GuestProfileRow,
-    UsageFlushCheckpointRow,
 )
 from lumiere.domain.access import (
     CounterKey,
@@ -30,20 +29,20 @@ class PostgresUsageRepository:
     async def flush_charges(self, writer_id: UUID, sequence: int, deltas: Mapping[CounterKey, int]) -> dict[CounterKey, int]:
         if sequence < 1 or not deltas or any(delta <= 0 or key.feature != "people_provider" for key, delta in deltas.items()):
             raise ValueError("invalid usage batch")
+        if sequence > 2**63 - 1:
+            raise ValueError("usage batch out of sequence")
         for key in deltas:
             if key.window != "total":
                 date.fromisoformat(key.window)
-        await self.session.execute(insert(UsageFlushCheckpointRow).values(writer_id=writer_id, sequence=0).on_conflict_do_nothing())
-        checkpoint = await self.session.scalar(select(UsageFlushCheckpointRow).where(UsageFlushCheckpointRow.writer_id == writer_id).with_for_update())
-        assert checkpoint is not None
-        if checkpoint.sequence == sequence:
-            columns = (CounterRow.scope, CounterRow.subject, CounterRow.feature, CounterRow.window)
-            rows = (await self.session.scalars(select(CounterRow).where(tuple_(*columns).in_([(key.scope, key.subject, key.feature, key.window) for key in sorted(deltas)])))).all()
-        elif checkpoint.sequence == sequence - 1:
-            statement = insert(CounterRow).values([{**asdict(key), "count": deltas[key]} for key in sorted(deltas)])
-            rows = (await self.session.scalars(statement.on_conflict_do_update(index_elements=[CounterRow.scope, CounterRow.subject, CounterRow.feature, CounterRow.window], set_={"count": CounterRow.count + statement.excluded.count}).returning(CounterRow))).all()
-            checkpoint.sequence = sequence
-        else:
+        payload = [{**asdict(key), "count": deltas[key]} for key in sorted(deltas)]
+        charges = func.lumiere_flush_charges(
+            bindparam("writer_id", writer_id, type_=Uuid),
+            bindparam("sequence", sequence, type_=BigInteger),
+            bindparam("deltas", payload, type_=JSONB),
+        ).table_valued(*CounterRow.__table__.columns)
+        statement = select(CounterRow).from_statement(select(charges)).execution_options(populate_existing=True)
+        rows = (await self.session.scalars(statement)).all()
+        if not rows:
             raise ValueError("usage batch out of sequence")
         return self._counts(rows)
 
