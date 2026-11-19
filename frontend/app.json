@@ -1,0 +1,15 @@
+{
+  "expo": {
+    "name": "Lumiere",
+    "slug": "lumiere",
+    "version": "1.0.0",
+    "scheme": "lumiere",
+    "web": {
+      "output": "single",
+      "name": "Lumiere"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
+}

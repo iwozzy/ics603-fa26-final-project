@@ -1,0 +1,108 @@
+name: Lumiere CI
+on:
+  pull_request:
+  push:
+  workflow_dispatch:
+    inputs:
+      cache_expiry:
+        description: Run the browser expiry check with a 10-second cache lifetime
+        type: boolean
+        default: false
+permissions:
+  contents: read
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      backend: ${{ steps.filter.outputs.backend }}
+      frontend: ${{ steps.filter.outputs.frontend }}
+      e2e: ${{ steps.filter.outputs.e2e }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: |
+          python3 - <<'PYTHON'
+          import os, subprocess
+          base = os.environ.get("BASE_SHA", "")
+          if not base or set(base) == {"0"}:
+              flags = dict.fromkeys(("backend", "frontend", "e2e"), True)
+          else:
+              paths = subprocess.check_output(["git", "diff", "--name-only", base, "HEAD"], text=True).splitlines()
+              shared = any(p.startswith(("docs/samples/", "docs/superpowers/", "deploy/", "compose", ".github/")) or p in ("Makefile", "openapi.json", ".dockerignore") for p in paths)
+              backend = shared or any(p.startswith("backend/") for p in paths)
+              frontend = shared or any(p.startswith("frontend/") for p in paths)
+              flags = {"backend": backend, "frontend": frontend, "e2e": backend or frontend or any(p.startswith("e2e/") for p in paths)}
+          with open(os.environ["GITHUB_OUTPUT"], "a") as out:
+              for key, value in flags.items(): out.write(f"{key}={str(value).lower()}\n")
+          PYTHON
+  backend:
+    needs: changes
+    if: needs.changes.outputs.backend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: astral-sh/setup-uv@68559e99cc807c1eb7e9238fd43a15bba460eec2
+        with:
+          version: '0.13.7'
+          python-version: '3.13'
+          cache-dependency-glob: backend/uv.lock
+      - run: uv --directory backend sync --frozen
+      - run: uv --directory backend run pytest tests/unit tests/api tests/integration/clients -q
+      - run: uv --directory backend run ruff check src tests scripts migrations
+      - run: uv --directory backend run pyrefly check
+      - run: uv --directory backend run lint-imports
+      - run: make test-integration
+      - run: uv --directory backend run python scripts/export_openapi.py
+      - run: git diff --exit-code -- openapi.json
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - run: npm --prefix frontend ci
+      - run: npm --prefix frontend test -- --runInBand
+      - run: npm --prefix frontend run typecheck
+      - run: npm --prefix frontend run lint
+      - run: npm --prefix frontend run generate:api
+      - run: git diff --exit-code -- frontend/src/adapters/outbound/api/generated
+      - run: npm --prefix frontend run export:web
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.e2e == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm --prefix e2e ci
+      - run: npm --prefix e2e exec -- playwright install --with-deps chromium
+      - run: npm --prefix e2e run typecheck
+      - run: make test-e2e
+  cache-expiry:
+    if: github.event_name == 'workflow_dispatch' && inputs.cache_expiry
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          cache: npm
+          cache-dependency-path: e2e/package-lock.json
+      - run: npm --prefix e2e ci
+      - run: npm --prefix e2e exec -- playwright install --with-deps chromium
+      - run: make test-cache-expiry

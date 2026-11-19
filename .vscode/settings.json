@@ -1,0 +1,12 @@
+{
+    "python.analysis.diagnosticsSource": "Pylance + Pyrefly",
+    "python.defaultInterpreterPath": "${workspaceFolder}/backend/.venv/bin/python",
+    "[javascript][javascriptreact][typescript][typescriptreact][json][jsonc]": {
+        "editor.defaultFormatter": "esbenp.prettier-vscode",
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+            "source.fixAll.eslint": "explicit"
+        }
+    },
+    "prettier.requireConfig": true
+}

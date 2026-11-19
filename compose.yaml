@@ -1,0 +1,54 @@
+name: lumiere
+services:
+  backend:
+    build: backend
+    environment:
+      LUMIERE_DATABASE_URL: ${LUMIERE_DATABASE_URL:?supply the pooled application connection}
+      LUMIERE_TMDB_ACCESS_TOKEN: ${LUMIERE_TMDB_ACCESS_TOKEN:?supply runtime provider authorization}
+      LUMIERE_IP_HASH_KEY: ${LUMIERE_IP_HASH_KEY:?supply a stable runtime IP key}
+      LUMIERE_TRUSTED_PROXY_CIDRS: ${LUMIERE_TRUSTED_PROXY_CIDRS:?supply ingress network CIDRs}
+      LUMIERE_GLOBAL_REQUESTS_PER_MINUTE: ${LUMIERE_GLOBAL_REQUESTS_PER_MINUTE:?required cap}
+      LUMIERE_SESSION_REQUESTS_PER_MINUTE: ${LUMIERE_SESSION_REQUESTS_PER_MINUTE:?required cap}
+      LUMIERE_IP_REQUESTS_PER_MINUTE: ${LUMIERE_IP_REQUESTS_PER_MINUTE:?required cap}
+      LUMIERE_BOOTSTRAP_REQUESTS_PER_IP_PER_MINUTE: ${LUMIERE_BOOTSTRAP_REQUESTS_PER_IP_PER_MINUTE:?required cap}
+      LUMIERE_GLOBAL_PROVIDER_DAILY: ${LUMIERE_GLOBAL_PROVIDER_DAILY:?required cap}
+      LUMIERE_SESSION_PROVIDER_DAILY: ${LUMIERE_SESSION_PROVIDER_DAILY:?required cap}
+      LUMIERE_IP_PROVIDER_DAILY: ${LUMIERE_IP_PROVIDER_DAILY:?required cap}
+      LUMIERE_GLOBAL_PROVIDER_TOTAL: ${LUMIERE_GLOBAL_PROVIDER_TOTAL:?required cap}
+      LUMIERE_SESSION_PROVIDER_TOTAL: ${LUMIERE_SESSION_PROVIDER_TOTAL:?required cap}
+      LUMIERE_IP_PROVIDER_TOTAL: ${LUMIERE_IP_PROVIDER_TOTAL:?required cap}
+      LUMIERE_TELEMETRY_ENABLED: ${LUMIERE_TELEMETRY_ENABLED:-false}
+      LUMIERE_SEARCH_CACHE_MAX_AGE_SECONDS: ${LUMIERE_SEARCH_CACHE_MAX_AGE_SECONDS:-300}
+      OTEL_EXPORTER_OTLP_ENDPOINT: ${OTEL_EXPORTER_OTLP_ENDPOINT:-}
+      OTEL_EXPORTER_OTLP_HEADERS: ${OTEL_EXPORTER_OTLP_HEADERS:-}
+      OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
+      interval: 10s
+      timeout: 6s
+      retries: 5
+  web:
+    build:
+      context: frontend
+      additional_contexts:
+        ingress: deploy/caddy
+    environment:
+      SITE_ADDRESS: ${LUMIERE_SITE_ADDRESS:-:8080}
+    ports:
+      - "127.0.0.1:8080:8080"
+    depends_on:
+      backend:
+        condition: service_healthy
+  postgres:
+    profiles: [local-db]
+    image: postgres:18-alpine
+    environment:
+      POSTGRES_USER: lumiere_local
+      POSTGRES_DB: lumiere_local
+      POSTGRES_HOST_AUTH_METHOD: trust
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      - local-data:/var/lib/postgresql
+volumes:
+  local-data:

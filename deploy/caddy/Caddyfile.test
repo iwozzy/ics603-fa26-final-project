@@ -1,0 +1,26 @@
+{
+    log {
+        format filter {
+            wrap json
+            fields {
+                request>uri delete
+                request>headers delete
+            }
+        }
+    }
+}
+{$SITE_ADDRESS::8080} {
+    header Content-Security-Policy "img-src 'self' data:"
+    # Access logging is deliberately disabled: API URLs include search text.
+    handle /api/* {
+        reverse_proxy backend:8000
+    }
+    handle /health/* {
+        reverse_proxy backend:8000
+    }
+    handle {
+        root * /srv
+        try_files {path} /index.html
+        file_server
+    }
+}

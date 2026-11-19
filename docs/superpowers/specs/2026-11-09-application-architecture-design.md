@@ -6,9 +6,17 @@ Status: Approved by the project owner on 2026-11-09
 
 Scope: Starting architecture for the whole application; individual features will be designed separately.
 
+Amendment agreed on 2026-11-13 during F001 planning: deliver people search first and design following as the next feature. Do not cache people-search results on the server at this time; successful search responses use `Cache-Control: private, max-age=300` to permit browser caching. The [F001 design](2026-11-13-F001-search-people-design.md), approved on 2026-11-13, records the feature details. These two agreed changes supersede the original first-increment grouping and people-search-cache direction below.
+
+Additional F001 revisions agreed on 2026-11-13: people-search candidates remain transient, with provider-to-app ID mappings created only on explicit following in the next feature. All search API failures use HTTP `500`; clients silently show a blank results area for failures and successful empty results, without hint messages. Known-for recognition titles may include TV as well as movies. The TMDB adapter sends only the required query, allowing provider defaults, and constructs profile URLs with `https://image.tmdb.org/t/p/w180_and_h180_face/`. Successful search responses omit `Vary: Cookie`. These F001 exceptions take precedence over the general identity, movie-only, and typed HTTP-error directions below; app-owned identities and other feature policies still apply when catalog entities are retained in later features.
+
+F001 clarification agreed on 2026-11-13: omit IDs from the search response and decide how to capture user selection when designing following. Preserve the initial example-search guidance from the supplied wireframes; the restriction on hint messages concerns additional messages beyond those wireframes, including messages for empty results and failures.
+
 ## Intent and document authority
 
-The application helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
+Naming clarification agreed on 2026-11-15: the app is **Lumiere**; use `lumiere` where lowercase naming is conventional.
+
+Lumiere helps people discover movies through actors, directors, and other creative contributors. A user follows people, explores their combined filmographies chronologically, tracks watched movies and a watch list, imports movie titles from notes or photos, and receives movie suggestions. Semantic storyline search supports exploring the user's timeline in their own words.
 
 This document establishes the boundaries, technology direction, data ownership, and operational rules that later feature designs must preserve. It is not an implementation plan or a complete feature specification. Ports described here are responsibilities, not final interface signatures.
 
@@ -150,7 +158,7 @@ A unit-of-work/transaction capability supports related local changes without exp
 
 ## Catalog identities, local data, and provenance
 
-**Agreed:** people and movies use app-owned identifiers. External identifiers are mappings keyed by provider and entity type. Follows, library facts, and timeline results reference internal identities. Actors and crew are people with credits that can contain multiple roles/jobs; they are not separate incompatible identity types.
+**Agreed:** people and movies use app-owned identifiers. External identifiers are mappings keyed by provider and entity type. Follows, library facts, and timeline results reference internal identities. Actors and crew are people with credits that can contain multiple roles/jobs; they are not separate incompatible identity types. **F001 exception agreed on 2026-11-13:** people-search candidates remain transient; search does not create app-owned catalog identities or retain source mappings. Identity mappings begin when the user explicitly follows someone in the next feature.
 
 Keep these concerns distinct:
 
@@ -169,7 +177,7 @@ Do not merge people or movies solely by display name/title. Cross-provider recon
 
 Use suitable previously retrieved data before making provider calls. Read available local catalog data while arranging due refreshes in the background. Missing information can trigger an on-demand lookup or hydration, depending on the use case. Preserve useful stale data during refresh failures and expose incomplete hydration distinctly from a genuine empty filmography.
 
-An entity table alone is not a complete search index of an external provider. Cache reusable search results with their query, page, language/region, provider, and fetch time where relevant; on a cache miss, search the provider and retain normalized results. Do not claim a local subset represents every matching person/movie. Search cache sizing and retention are feature-level policies.
+An entity table alone is not a complete search index of an external provider. Cache reusable search results with their query, page, language/region, provider, and fetch time where relevant; on a cache miss, search the provider and retain normalized results. **People-search exception agreed on 2026-11-13:** no server-side people-search-result caching at this time; a search reaching provider dispatch fetches page one, and successful API responses carry `Cache-Control: private, max-age=300` for browser caching. Do not introduce search-result retention or background search refresh for F001. Do not claim a local subset represents every matching person/movie. Search cache sizing and retention for other features remain feature-level policies.
 
 ### Freshness
 
@@ -245,7 +253,7 @@ Semantic search remains a future capability. Define separate embedding and retri
 
 **Proposed:** a JSON HTTP API under `/api/v1`, described using OpenAPI. Use stable operation names, explicit pagination, typed errors, and app-owned IDs. Generate client transport types and, where supported, runtime validators from the schema; keep generated code behind the client HTTP adapter. TypeScript types alone do not validate network responses. Zod is the proposed client runtime validation tool; server-side validation remains Pydantic. [FastAPI supports OpenAPI client generation](https://fastapi.tiangolo.com/advanced/generate-clients/) and [Zod provides runtime parsing](https://zod.dev/).
 
-Expose business outcomes such as followed, pending hydration, unavailable provider, and quota reset through stable API models rather than SQL job statuses or provider exceptions. Client retries of mutations must not create duplicate follows or library facts. Large result sets use bounded queries; timeline reads do not synchronously hydrate every movie.
+Expose business outcomes such as followed, pending hydration, unavailable provider, and quota reset through stable API models rather than SQL job statuses or provider exceptions. **F001 exception agreed on 2026-11-13:** people search returns HTTP `200` on success, including empty results, and HTTP `500` for every failure; the client silently displays a blank results area for empty results and failures, with no hint messages. Internal failure categories remain available to server telemetry/accounting. Client retries of mutations must not create duplicate follows or library facts. Large result sets use bounded queries; timeline reads do not synchronously hydrate every movie.
 
 Use ordinary request/response and bounded polling initially. SSE, streaming results, offline synchronization, and resumable AI jobs require their own feature decisions if needed. **Proposed initial AI execution:** bounded async request/response, with uploaded notes/photos treated as transient input rather than a persistent upload archive. If a later feature needs background media processing, add a blob-storage port and durable operation semantics rather than depending on a container filesystem.
 
@@ -278,7 +286,7 @@ Architecture verification should include:
 
 These are future verification requirements, not claims that implementation or tests exist now.
 
-The first feature session should design people search and following against this baseline. It should identify the minimum catalog and identity capabilities required and decide whether initial filmography hydration/timeline display is delivered alongside following or in the next increment. Username/password authentication, AI imports, suggestions, semantic search, and full native delivery are not silently added to the first increment by this document.
+The original first increment grouped people search and following. **Updated on 2026-11-13:** F001 designs working people search, and following is the next feature with its own design. Identify the minimum catalog and identity capabilities required for search; decide filmography hydration/timeline delivery during the following feature design. Username/password authentication, AI imports, suggestions, semantic search, and full native delivery are not silently added to the first increment by this document.
 
 ## Deliberately deferred decisions
 
