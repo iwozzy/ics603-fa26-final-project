@@ -1,7 +1,11 @@
 name: lumiere
 services:
   backend:
-    build: backend
+    build:
+      context: backend
+      platforms:
+        - linux/amd64
+        - linux/arm64
     environment:
       LUMIERE_DATABASE_URL: ${LUMIERE_DATABASE_URL:?supply the pooled application connection}
       LUMIERE_TMDB_ACCESS_TOKEN: ${LUMIERE_TMDB_ACCESS_TOKEN:?supply runtime provider authorization}
@@ -34,6 +38,9 @@ services:
       context: frontend
       additional_contexts:
         ingress: deploy/caddy
+      platforms:
+        - linux/amd64
+        - linux/arm64
     environment:
       SITE_ADDRESS: ${LUMIERE_SITE_ADDRESS:-:8080}
     ports:

@@ -1,0 +1,5 @@
+services:
+    backend:
+        image: "${IMAGE_BASE:?Set IMAGE_BASE}-backend:${IMAGE_TAG:-latest}"
+    web:
+        image: "${IMAGE_BASE:?Set IMAGE_BASE}-web:${IMAGE_TAG:-latest}"
