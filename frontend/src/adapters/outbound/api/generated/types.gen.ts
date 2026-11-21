@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * CatalogProvider
+ */
+export type CatalogProvider = 'tmdb';
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -19,13 +24,13 @@ export type HttpValidationError = {
  */
 export type PersonResponse = {
     /**
-     * Department
-     */
-    department: string | null;
-    /**
      * Known For
      */
     known_for: Array<string>;
+    /**
+     * Known For Department
+     */
+    known_for_department: string | null;
     /**
      * Name
      */
@@ -34,6 +39,11 @@ export type PersonResponse = {
      * Profile Image Url
      */
     profile_image_url: string | null;
+    provider: CatalogProvider;
+    /**
+     * Provider Id
+     */
+    provider_id: number;
 };
 
 /**

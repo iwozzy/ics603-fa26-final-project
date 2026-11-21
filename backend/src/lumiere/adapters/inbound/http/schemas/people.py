@@ -2,13 +2,17 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from lumiere.domain.people import MAX_PROVIDER_ID, CatalogProvider
+
 Nonblank = Annotated[str, Field(min_length=1, pattern=r"\S")]
 
 
 class PersonResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True, hide_input_in_errors=True)
+    provider: CatalogProvider
+    provider_id: Annotated[int, Field(strict=True, gt=0, le=MAX_PROVIDER_ID)]
     name: Nonblank
-    department: str | None
+    known_for_department: str | None
     profile_image_url: str | None
     known_for: Annotated[list[Nonblank], Field(max_length=3)]
 

@@ -2,20 +2,25 @@ import re
 from typing import cast
 
 from lumiere.adapters.outbound.clients.tmdb_people.dto import PersonDTO
-from lumiere.domain.people import PersonSummary
+from lumiere.domain.people import CatalogProvider, PersonSummary
 
 
 def nonblank(value: object) -> str | None:
     return value.strip() if isinstance(value, str) and value.strip() else None
 
 
-def image_url(value: object) -> str | None:
+def profile_path(value: object) -> str | None:
     path = nonblank(value)
     if not path or not re.fullmatch(r"[A-Za-z0-9_./-]+", path):
         return None
     if ".." in path.split("/") or not path.lstrip("/"):
         return None
-    return "https://image.tmdb.org/t/p/w180_and_h180_face/" + path.lstrip("/")
+    return "/" + path.lstrip("/")
+
+
+def image_url(value: object) -> str | None:
+    path = profile_path(value)
+    return "https://image.tmdb.org/t/p/w180_and_h180_face" + path if path else None
 
 
 def map_person(person: PersonDTO) -> PersonSummary | None:
@@ -32,4 +37,4 @@ def map_person(person: PersonDTO) -> PersonSummary | None:
             title = nonblank(item.get(field)) if field else None
             if title:
                 titles.append(title)
-    return PersonSummary(name, nonblank(person.known_for_department), image_url(person.profile_path), tuple(titles[:3]))
+    return PersonSummary(provider=CatalogProvider.TMDB, provider_id=person.id, name=name, known_for_department=nonblank(person.known_for_department), profile_image_url=image_url(person.profile_path), known_for=tuple(titles[:3]), provider_profile_path=profile_path(person.profile_path))

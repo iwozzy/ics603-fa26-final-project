@@ -3,6 +3,7 @@ import pytest
 
 from lumiere.domain.errors import SearchFailed
 from tests.api.conftest import Api
+from tests.fakes.search import sample_person
 
 
 @pytest.mark.parametrize("empty", [False, True])
@@ -41,7 +42,7 @@ async def test_success_and_empty_success_headers(api: Api, empty: bool) -> None:
     if empty:
         assert response.json()["people"] == []
     else:
-        assert set(response.json()["people"][0]) == {"name", "department", "profile_image_url", "known_for"}
+        assert set(response.json()["people"][0]) == {"provider", "provider_id", "name", "known_for_department", "profile_image_url", "known_for"}
 
 
 @pytest.mark.parametrize("kind", ["missing", "blank", "long", "session", "quota", "storage", "provider", "timeout", "unhandled"])
@@ -62,10 +63,9 @@ async def test_every_failure_is_empty_500(api: Api, kind: str) -> None:
 
 
 async def test_invalid_output_is_empty_500(api: Api) -> None:
-    from lumiere.domain.people import PersonSummary
 
     await api.client.post("/api/v1/guest-session")
-    api.catalog.people = (PersonSummary("", None, None, ("A", "B", "C", "D")),)
+    api.catalog.people = (sample_person(name="", known_for=("A", "B", "C", "D")),)
     response = await api.client.get("/api/v1/people/search?query=Tom")
     assert response.status_code == 500
     assert response.content == b"" and response.headers["cache-control"] == "no-store"

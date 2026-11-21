@@ -6,8 +6,7 @@ import pytest
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import SearchFailed
-from lumiere.domain.people import PersonSummary
-from tests.fakes.search import FakeAdmission, FakeCatalog, FakeClock
+from tests.fakes.search import FakeAdmission, FakeCatalog, FakeClock, sample_person
 
 
 @pytest.fixture
@@ -16,7 +15,7 @@ def context() -> GuestContext:
 
 
 async def test_preserves_provider_order_and_limits_to_seven(context: GuestContext) -> None:
-    catalog = FakeCatalog(tuple(PersonSummary(str(i), None, None, ()) for i in range(10)))
+    catalog = FakeCatalog(tuple(sample_person(i + 1, name=str(i)) for i in range(10)))
     admission = FakeAdmission()
     result = await SearchPeople(catalog, admission, FakeClock()).execute(" Tom ", context)
     assert result.query == "Tom"
@@ -27,7 +26,7 @@ async def test_preserves_provider_order_and_limits_to_seven(context: GuestContex
 
 @pytest.mark.parametrize("count", [0, 3])
 async def test_short_or_empty_page_never_fetches_more(context: GuestContext, count: int) -> None:
-    people = tuple(PersonSummary(str(i), None, None, ()) for i in range(count))
+    people = tuple(sample_person(i + 1, name=str(i)) for i in range(count))
     catalog = FakeCatalog(people)
     result = await SearchPeople(catalog, FakeAdmission(), FakeClock()).execute("Tom", context)
     assert result.people == people

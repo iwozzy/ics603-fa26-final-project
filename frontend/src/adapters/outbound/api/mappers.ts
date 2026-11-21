@@ -9,5 +9,5 @@ const responseSchema = zSearchPeopleResponse.extend({ query: z.string().refine(v
 
 export function mapSearchResult(value: unknown): SearchResult {
   const dto = responseSchema.parse(value);
-  return { query: dto.query, people: dto.people.map(person => ({ name: person.name, department: person.department, profileImageUrl: person.profile_image_url, knownFor: person.known_for })) };
+  return { query: dto.query, people: dto.people.map(person => ({ provider: person.provider, providerId: person.provider_id, name: person.name, knownForDepartment: person.known_for_department, profileImageUrl: person.profile_image_url, knownFor: person.known_for })) };
 }

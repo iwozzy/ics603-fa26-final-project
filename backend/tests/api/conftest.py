@@ -9,10 +9,9 @@ from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.domain.access import UsagePolicy
-from lumiere.domain.people import PersonSummary
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
-from tests.fakes.search import FakeAdmission, FakeCatalog, FakeClock
+from tests.fakes.search import FakeAdmission, FakeCatalog, FakeClock, sample_person
 
 
 @dataclass
@@ -25,7 +24,7 @@ class Api:
 
 @pytest.fixture
 async def api() -> AsyncIterator[Api]:
-    catalog = FakeCatalog((PersonSummary("Tom", None, None, ("Alien",)),))
+    catalog = FakeCatalog((sample_person(known_for=("Alien",)),))
     admission = FakeAdmission()
     sessions = GuestIdentityService(MemoryAccess(), UsagePolicy(100,100,100,100,100,100,100,100,100,100))
     services = HttpServices(SearchPeople(catalog, admission, FakeClock()), sessions, b"synthetic-test-key")

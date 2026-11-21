@@ -1,6 +1,13 @@
 {
   "components": {
     "schemas": {
+      "CatalogProvider": {
+        "enum": [
+          "tmdb"
+        ],
+        "title": "CatalogProvider",
+        "type": "string"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -16,17 +23,6 @@
       },
       "PersonResponse": {
         "properties": {
-          "department": {
-            "anyOf": [
-              {
-                "type": "string"
-              },
-              {
-                "type": "null"
-              }
-            ],
-            "title": "Department"
-          },
           "known_for": {
             "items": {
               "minLength": 1,
@@ -36,6 +32,17 @@
             "maxItems": 3,
             "title": "Known For",
             "type": "array"
+          },
+          "known_for_department": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Known For Department"
           },
           "name": {
             "minLength": 1,
@@ -53,11 +60,22 @@
               }
             ],
             "title": "Profile Image Url"
+          },
+          "provider": {
+            "$ref": "#/components/schemas/CatalogProvider"
+          },
+          "provider_id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Provider Id",
+            "type": "integer"
           }
         },
         "required": [
+          "provider",
+          "provider_id",
           "name",
-          "department",
+          "known_for_department",
           "profile_image_url",
           "known_for"
         ],

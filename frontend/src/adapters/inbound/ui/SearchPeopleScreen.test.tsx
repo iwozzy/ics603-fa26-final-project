@@ -45,7 +45,7 @@ test.each(['empty','error'])('completed %s leaves only heading and input', async
 
 test('row limits mixed titles and handles missing or broken images without separators', async () => {
   const repository = new DeferredRepository();
-  const person = { name: 'Tom', department: null, profileImageUrl: 'https://images.test/photo.jpg', knownFor: ['Movie', 'TV', 'Third', 'Fourth'] };
+  const person = { provider: 'tmdb' as const, providerId: 4139, name: 'Tom', knownForDepartment: null, profileImageUrl: 'https://images.test/photo.jpg', knownFor: ['Movie', 'TV', 'Third', 'Fourth'] };
   await renderWithPorts(<PersonRow person={person} />, repository);
   expect(screen.queryByText('Movie, TV, Third')).not.toBeNull(); expect(screen.queryByText(/Fourth| · /)).toBeNull();
   await fireEvent(screen.getByLabelText('Tom profile'), 'error');

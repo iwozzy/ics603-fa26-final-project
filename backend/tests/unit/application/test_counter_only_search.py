@@ -10,7 +10,7 @@ from lumiere.domain.access import GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from lumiere.domain.people import PersonSummary
 from tests.fakes.accounting import ControlledAccess
-from tests.fakes.search import FakeClock
+from tests.fakes.search import FakeClock, sample_person
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 CONTEXT = GuestContext(uuid4(), "synthetic-ip")
@@ -31,7 +31,7 @@ async def test_provider_outcome_keeps_local_charge_and_persists_asynchronously(e
                 await admission.admit_and_charge(CONTEXT, FakeClock().now())
             if error is not None:
                 raise error
-            return (PersonSummary("Tom", None, None, ()),)
+            return (sample_person(),)
 
     try:
         search = SearchPeople(Catalog(), admission, FakeClock())

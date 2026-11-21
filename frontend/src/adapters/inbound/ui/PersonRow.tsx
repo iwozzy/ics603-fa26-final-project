@@ -4,7 +4,7 @@ import type { PersonSummary } from '../../../domain/people';
 
 export function PersonRow({ person }: { person: PersonSummary }) {
   const [failed, setFailed] = useState(false);
-  const metadata = [person.department?.trim(), person.knownFor.filter(title => title.trim()).slice(0, 3).join(', ')].filter(Boolean).join(' · ');
+  const metadata = [person.knownForDepartment?.trim(), person.knownFor.filter(title => title.trim()).slice(0, 3).join(', ')].filter(Boolean).join(' · ');
   return <View style={styles.row}>
     {person.profileImageUrl && !failed ? <Image accessibilityLabel={person.name + ' profile'} source={{ uri: person.profileImageUrl }} style={styles.photo} onError={() => setFailed(true)} /> :
       <View accessibilityRole="image" accessibilityLabel={person.name + ' silhouette'} style={styles.silhouette}><View style={styles.head} /><View style={styles.shoulders} /></View>}
