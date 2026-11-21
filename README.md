@@ -76,9 +76,13 @@ queues drop incoming batches without failing search. A five-second shutdown drai
 runs alongside accounting cleanup; remaining work is cancelled and awaited before
 both pools are disposed. Crashes, shutdown timeout and exhausted retries can lose
 summaries. People writer health does not gate readiness or admission. Browser-cache
-hits enqueue nothing. The frontend adds the stable `representation=people-v2`
-query parameter so cached responses from the previous contract cannot mask the
-new provider fields; the provider still receives only its required `query`. Following and handling a missing stored person are deferred.
+hits enqueue nothing. Following and handling a missing stored person are deferred.
+
+Before stable V1, coordinated breaking contract changes are acceptable. Search URLs
+contain only `query`; response compatibility and cache versioning are deferred.
+After a breaking change, users may need to clear their browser cache and reload
+the app to discard an old cached response. Revisit compatibility and cache
+transition handling before publishing stable V1.
 
 Sanitized `people.persistence` spans expose event kind, outstanding/in-flight
 counts, attempt and integer duration milliseconds without person content. See the

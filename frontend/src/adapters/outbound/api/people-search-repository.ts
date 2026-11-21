@@ -12,7 +12,7 @@ export class HttpPeopleSearchRepository implements PeopleSearchRepository {
       return await withDeadline(signal, async combined => {
         await this.sessions.ensure(combined);
         if (combined.aborted) throw new SearchFailed();
-        const response = await this.fetchImpl('/api/v1/people/search?query=' + encodeURIComponent(query) + '&representation=people-v2', { credentials: 'same-origin', signal: combined });
+        const response = await this.fetchImpl('/api/v1/people/search?query=' + encodeURIComponent(query), { credentials: 'same-origin', signal: combined });
         if (!response.ok) throw new SearchFailed();
         return mapSearchResult(await response.json());
       });

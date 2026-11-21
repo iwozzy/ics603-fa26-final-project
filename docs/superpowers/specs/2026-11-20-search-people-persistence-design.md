@@ -5,6 +5,13 @@ author's defaults and contract choices below. The user selected best-effort queu
 persistence, a dedicated people-writer pool of five connections plus five overflow
 connections, and asynchronous dispatch with at most ten batch writes in flight.
 
+## Pre-V1 contract policy — 2026-11-20
+
+The user accepts coordinated breaking contract changes during early development.
+Search URLs contain only `query`, without a response-version parameter. Users may
+need to clear their browser cache and reload after a breaking change. Compatibility
+and cache transition handling are deferred until before publishing stable V1.
+
 ## Intent and scope
 
 Establish app-owned person records as a stepping stone toward following people,
