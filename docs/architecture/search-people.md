@@ -91,7 +91,10 @@ flowchart TB
 The browser can satisfy a fresh cached search without reaching Caddy or the
 backend. A successful backend response sets `Cache-Control: private` with the
 configured lifetime, including for empty results. Bootstrap and error responses
-use `no-store`. There is no backend search-result cache.
+use `no-store`. There is no backend search-result cache. The frontend uses the stable
+`representation=people-v2` query parameter to separate this response contract
+from fresh browser-cache entries created by the previous release; the TMDB
+request still contains only `query`.
 
 ## Search request sequence
 

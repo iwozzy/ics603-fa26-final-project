@@ -17,7 +17,7 @@ test('encodes once, uses cookie transport and platform cache, strips ids', async
   const { repository, fetcher } = harness();
   const result = await repository.search("Timothée O'Neil & 李😀", signal());
   const [url, options] = fetcher.mock.calls[1];
-  expect(url).toBe('/api/v1/people/search?query=' + encodeURIComponent("Timothée O'Neil & 李😀"));
+  expect(url).toBe('/api/v1/people/search?query=' + encodeURIComponent("Timothée O'Neil & 李😀") + '&representation=people-v2');
   expect(options?.credentials).toBe('same-origin');
   expect(options?.cache).toBeUndefined();
   expect(options?.headers).toBeUndefined();

@@ -131,3 +131,18 @@ async def test_request_cancellation_after_enqueue_leaves_write_independent(conte
         store.allow_commit.set()
         await asyncio.gather(task, return_exceptions=True)
         await writer.close()
+
+
+async def test_catalog_reporter_failure_keeps_search_and_enqueue(context: GuestContext) -> None:
+    import httpx
+
+    from lumiere.adapters.outbound.clients.tmdb_people.client import TMDBPeopleCatalog
+    from tests.fakes.search import FakePeopleQueue
+    queue = FakePeopleQueue()
+    def broken(selected: int, invalid: int) -> None:
+        raise RuntimeError('SENTINEL_REPORTER_DETAIL')
+    async with httpx.AsyncClient(base_url='https://provider.test', transport=httpx.MockTransport(lambda _: httpx.Response(200, json={'results': [{'id': 4139, 'name': 'Tom'}]}))) as client:
+        search = SearchPeople(TMDBPeopleCatalog(client, report=broken), FakeAdmission(), FakeClock(), queue)
+        result = await search.execute('Tom', context)
+    assert result.people[0].provider_id == 4139
+    assert queue.batches == [result.people]

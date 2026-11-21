@@ -51,3 +51,51 @@ async def test_real_provider_to_selected_people_pool_pipeline(uows: Callable[[],
     finally:
         await writer.close()
         await registry.close()
+
+
+async def test_locked_batch_does_not_block_disjoint_people_write(uows: Callable[[], PostgresAccessUnitOfWork]) -> None:
+    import asyncio
+
+    from sqlalchemy import text
+
+    from lumiere.application.ports.people import PeopleWriteEvent
+    from tests.fakes.search import sample_person
+    registry = PoolRegistry()
+    pool = registry.register('people_writer', TEST_DATABASE_URL)
+    def people_uows() -> PostgresPeopleUnitOfWork:
+        return PostgresPeopleUnitOfWork(pool.sessions)
+    committed = asyncio.Event()
+    def report(event: PeopleWriteEvent) -> None:
+        if event.kind == 'succeeded':
+            committed.set()
+    writer = PeopleWriter(people_uows, report=report)
+    writer.start()
+    try:
+        async with people_uows() as seed:
+            await seed.people.upsert_batch((sample_person(1, name='Before'),))
+            await seed.commit()
+        async with people_uows() as blocker:
+            await blocker.session.execute(text('SELECT id FROM people WHERE tmdb_id = 1 FOR UPDATE'))
+            try:
+                writer.enqueue((sample_person(1, name='After'),))
+                # Confirm the actual INSERT is waiting on the held row lock.
+                async with people_uows() as observer:
+                    async with asyncio.timeout(2):
+                        while True:
+                            # PostgreSQL caches activity snapshots within a transaction.
+                            await observer.session.execute(text('SELECT pg_stat_clear_snapshot()'))
+                            if await observer.session.scalar(text("SELECT count(*) FROM pg_stat_activity WHERE datname = current_database() AND wait_event_type = 'Lock' AND query LIKE 'INSERT INTO people%'")):
+                                break
+                            await asyncio.sleep(.005)
+                writer.enqueue((sample_person(2, name='Independent'),))
+                await asyncio.wait_for(committed.wait(), 1)
+                async with people_uows() as observer:
+                    rows = (await observer.session.scalars(select(PersonRow).order_by(PersonRow.tmdb_id))).all()
+                    assert [(row.tmdb_id, row.name) for row in rows] == [(1, 'Before'), (2, 'Independent')]
+                assert writer.outstanding == 1
+            finally:
+                await blocker.rollback()
+        await writer.drain()
+    finally:
+        await writer.close()
+        await registry.close()

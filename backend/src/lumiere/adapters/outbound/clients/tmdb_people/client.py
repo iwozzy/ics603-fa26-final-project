@@ -38,5 +38,8 @@ class TMDBPeopleCatalog:
             if person is not None:
                 people.append(person)
         if self.report:
-            self.report(min(len(people), 7), len(envelope.results) - len(people))
+            try:
+                self.report(min(len(people), 7), len(envelope.results) - len(people))
+            except Exception:  # noqa: BLE001, S110 — diagnostics cannot fail catalog mapping
+                pass
         return tuple(people)

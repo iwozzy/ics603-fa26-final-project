@@ -215,3 +215,27 @@ async def test_report_failure_cannot_break_enqueue_or_dispatch() -> None:
     await asyncio.wait_for(writer.drain(), 1)
     await writer.close()
     assert store.commits == 1
+
+
+async def test_terminal_telemetry_reports_released_counts() -> None:
+    store = ControlledPeoplePersistence()
+    events: list[PeopleWriteEvent] = []
+    writer = PeopleWriter(store, report=events.append)
+    writer.start()
+    writer.enqueue((sample_person(),))
+    await asyncio.wait_for(writer.drain(), 1)
+    await writer.close()
+    assert [(e.kind, e.outstanding, e.in_flight) for e in events] == [('accepted', 1, 0), ('started', 1, 1), ('succeeded', 0, 0)]
+
+
+async def test_shutdown_cancellation_reports_inflight_drop_after_release() -> None:
+    store = ControlledPeoplePersistence()
+    store.allow_commit.clear()
+    events: list[PeopleWriteEvent] = []
+    writer = PeopleWriter(store, shutdown_timeout=.01, report=events.append)
+    writer.start()
+    writer.enqueue((sample_person(),))
+    await asyncio.wait_for(store.committing.wait(), 1)
+    await writer.close()
+    assert [(e.kind, e.outstanding, e.in_flight) for e in events] == [('accepted', 1, 0), ('started', 1, 1), ('dropped', 0, 0)]
+    assert store.rollbacks == 1
