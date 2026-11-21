@@ -1,9 +1,9 @@
 # Asynchronous person persistence during search
 
-Status: draft for user approval. The user selected best-effort queued persistence,
-a dedicated people-writer pool of five connections plus five overflow connections,
-and asynchronous dispatch with at most ten batch writes in flight. Remaining
-design choices below are proposals, rather than previously approved requirements.
+Status: approved by the user in conversation on 2026-11-20, including the design
+author's defaults and contract choices below. The user selected best-effort queued
+persistence, a dedicated people-writer pool of five connections plus five overflow
+connections, and asynchronous dispatch with at most ten batch writes in flight.
 
 ## Intent and scope
 
@@ -46,17 +46,17 @@ Each returned person gains `provider` and `provider_id`. Rename `department` to
 domain property to `knownForDepartment`. Keep the current name, complete profile
 image URL, and zero-to-three nonblank recognition titles.
 
-Proposed numeric-ID contract: `provider_id` is a positive JSON integer no greater
+Numeric-ID contract: `provider_id` is a positive JSON integer no greater
 than `9,007,199,254,740,991` (`2^53 - 1`), so the TypeScript client can retain it
 exactly as a number. Validate that bound at the provider boundary and in generated
 transport schemas. Skip records outside that range rather than silently rounding
 their identity. This is the design author's boundary-validation choice; supporting
 larger identifiers would require a later string-ID contract change.
 
-Proposed provider representation: a stable app-defined string identifier `tmdb`,
+Provider representation: a stable app-defined string identifier `tmdb`,
 declared in an application-owned provider vocabulary. This is not a provider ID
-lookup from the database. There is currently no providers table. This proposal is
-subject to user approval; numeric provider identities would change the design.
+lookup from the database. There is currently no providers table. Numeric provider
+identities would require a design change.
 
 Example person response:
 
@@ -88,7 +88,7 @@ invalid provider records.
 
 ## Person storage
 
-Add a forward Alembic migration after `0006_usage_flush_function`. Proposed SQL
+Add a forward Alembic migration after `0006_usage_flush_function`. SQL
 table name: `people`, matching the repository's lowercase plural convention; it
 represents the app-owned Person entity.
 
@@ -173,7 +173,7 @@ than becoming an unbounded collection of tasks waiting for connections. Database
 waits yield to the event loop; no synchronous driver calls or worker threads are
 introduced by this change.
 
-Proposed operational defaults, chosen here for review:
+Operational defaults, selected by the design author and approved with this document:
 
 - At most 1,024 outstanding search batches, counting queued and in-flight work.
   Track that combined count so taking an entry out of the queue does not open a
@@ -253,4 +253,4 @@ Choose internal class/module names, port granularity, and the exact safe dispatc
 mechanism within these contracts. Keep the pool registry adapter-local and reusable
 without introducing a generic scheduler. Verify PostgreSQL's required default cast
 and choose the smallest correct representation. Do not implement following or add
-provider tables unless the user changes the proposed string provider contract.
+provider tables unless the user changes the approved string provider contract.
