@@ -1,5 +1,6 @@
+from dataclasses import dataclass
 from types import TracebackType
-from typing import Protocol, Self
+from typing import Literal, Protocol, Self
 
 from lumiere.domain.people import PersonSummary
 
@@ -19,3 +20,16 @@ class PeopleUnitOfWork(Protocol):
 
 class PeopleUnitOfWorkFactory(Protocol):
     def __call__(self) -> PeopleUnitOfWork: ...
+
+
+class PeoplePersistenceQueue(Protocol):
+    def enqueue(self, people: tuple[PersonSummary, ...]) -> bool: ...
+
+
+@dataclass(frozen=True)
+class PeopleWriteEvent:
+    kind: Literal['accepted', 'dropped', 'started', 'succeeded', 'retry', 'failed']
+    outstanding: int
+    in_flight: int
+    attempt: int = 0
+    duration_ms: int = 0
