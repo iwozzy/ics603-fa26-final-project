@@ -2,7 +2,7 @@
 
 Implemented architecture of `feature/brainstorming/F001-search-people` at
 `d779554`, compared with `main` at `7a468ca`. This describes the code at that
-snapshot, including the later guest-identity and asynchronous-accounting changes.
+snapshot, amended on 2026-11-20 for [asynchronous person persistence](../superpowers/specs/2026-11-20-search-people-persistence-design.md).
 
 ## Compact component diagram
 
@@ -19,10 +19,15 @@ flowchart TD
         Admission --> Queue["Bounded charge queue"]
         Queue -.-> Writer["Background usage writer"]
         Search --> Adapter["TMDB adapter"]
+        Search --> PeopleQueue["Selected summaries: bounded queue"]
+        PeopleQueue -.-> PeopleWriter["People dispatcher: up to ten batch tasks"]
     end
 
-    Guests -->|"Bootstrap / cache miss"| DB[("PostgreSQL")]
-    Writer -.->|"Persist charges + checkpoints"| DB
+    Guests -->|"Bootstrap / cache miss"| AppPool["application pool: 5 + 5"]
+    Writer -.-> AppPool
+    AppPool --> DB[("PostgreSQL")]
+    PeopleWriter -.-> PeoplePool["people_writer pool: 5 + 5"]
+    PeoplePool --> DB
     DB -.->|"Startup usage snapshot"| Admission
     Adapter --> TMDB["TMDB API"]
 ```
@@ -68,11 +73,15 @@ flowchart TB
         WRITER -.->|"Flush daily / total charges"| UOW
         UOW -.->|"Startup snapshot and committed counts"| ADMIT
         SEARCH --> CATALOG
+        SEARCH -->|"Offer selected immutable batch; no await"| PQ["People queue: 1,024 queued + in-flight"]
+        PQ -.-> PW["Dispatcher: ten tasks; three attempts per batch"]
+        PW -.-> PUOW["People UoW: atomic bulk upsert"]
     end
 
-    DB[("PostgreSQL<br/>guest_profiles + guest_credentials<br/>usage_counters + usage_flush_checkpoints")]
+    DB[("PostgreSQL<br/>guest_profiles + guest_credentials<br/>usage_counters + usage_flush_checkpoints + people")]
     TMDB["TMDB API<br/>GET /3/search/person; first page"]
-    UOW --> DB
+    UOW --> AP["application pool: 5 + 5"] --> DB
+    PUOW --> PP["people_writer pool: 5 + 5"] --> DB
     CATALOG --> TMDB
 
     CONTRACT["Root openapi.json"]
@@ -187,3 +196,39 @@ sequenceDiagram
 | Durable counters and batch checkpoints | [repositories.py](../../backend/src/lumiere/adapters/outbound/persistence/repositories.py), [models.py](../../backend/src/lumiere/adapters/outbound/persistence/models.py) |
 | Same-origin serving and proxy | [Caddyfile](../../deploy/caddy/Caddyfile) |
 | API contract | [openapi.json](../../openapi.json) |
+
+## Person summary persistence amendment — 2026-11-20
+
+The [approved design](../superpowers/specs/2026-11-20-search-people-persistence-design.md)
+supersedes F001's identity-deferral and no-person-storage policy. Provider identity
+is now retained end to end: `provider: "tmdb"`, positive safe-integer `provider_id`,
+and `known_for_department` (frontend `knownForDepartment`). Internal normalized
+profile paths are stored alongside the same zero-to-three recognition strings
+served to clients. Search does not return the app-owned person ID.
+
+```mermaid
+sequenceDiagram
+    participant Search
+    participant Queue as People queue
+    participant Writer as Independent batch task
+    participant Pool as people_writer pool
+    Search->>Queue: enqueue(selected[:7]) without awaiting
+    Search-->>Search: Return response with original order/duplicates
+    Queue-->>Writer: Dispatch when one of ten slots is free
+    Writer->>Pool: Fresh UoW for each attempt
+    Pool->>Pool: One sorted, deduplicated bulk upsert + commit
+```
+
+Each attempt has a five-second timeout including checkout and commit. Up to three
+attempts use a one-second async delay, retaining their outstanding allowance and
+slot. The 1,024-batch bound counts queued and in-flight work together. Saturation,
+unavailability, exhausted retries, crashes and shutdown expiry may lose summaries;
+search remains independent of those outcomes. Optional fields can be cleared by
+updates, overlapping writes are last-applied, and existing app IDs remain stable.
+
+Accounting and people drain concurrently for up to five seconds each; all remaining
+work is cancelled and awaited before HTTP/pool disposal, including partial startup
+failure. Client cancellation after enqueue leaves the independent write running.
+Readiness still uses accounting health and the application pool. Two pools allow
+at most twenty checked-out connections in total, without isolating server locks or
+CPU. Future following must define how to handle missing people.

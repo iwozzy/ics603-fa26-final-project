@@ -14,7 +14,7 @@ from lumiere.domain.access import UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
-from tests.fakes.search import FakeAdmission, FakeClock
+from tests.fakes.search import FakeAdmission, FakeClock, FakePeopleQueue
 
 
 async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -28,7 +28,7 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     async with httpx.AsyncClient(base_url="https://provider.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "SENTINEL_PAYLOAD"}, {"id": False, "name": "invalid"}]}))) as provider:
         catalog = TMDBPeopleCatalog(provider, report=telemetry.record_catalog_counts)
         policy = UsagePolicy(100,100,100,100,100,100,100,100,100,100)
-        services = HttpServices(SearchPeople(catalog, admission, FakeClock()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key")
+        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key")
         app = create_app(telemetry.observe_services(services))
         telemetry.instrument_http(app)
         async with httpx.AsyncClient(base_url="https://app.test", transport=httpx.ASGITransport(app=app)) as client:
@@ -92,4 +92,22 @@ async def test_telemetry_failure_does_not_block_transport(monkeypatch: pytest.Mo
     monkeypatch.setattr(logfire, "span", broken)
     async with httpx.AsyncClient(transport=telemetry.ObservedTransport(httpx.MockTransport(lambda _: httpx.Response(200)))) as client:
         assert (await client.get("https://provider.test/?query=SENTINEL_QUERY")).status_code == 200
+    telemetry.configure_observability(False)
+
+
+def test_people_events_are_sanitized_and_reporter_outage_is_contained(monkeypatch: pytest.MonkeyPatch) -> None:
+    import lumiere.observability as telemetry
+    from lumiere.application.ports.people import PeopleWriteEvent
+    exporter = InMemorySpanExporter()
+    logfire.configure(send_to_logfire=False, console=False, inspect_arguments=False, additional_span_processors=[SimpleSpanProcessor(exporter)])
+    monkeypatch.setattr(telemetry, '_configure_export', lambda: True)
+    telemetry.configure_observability(True)
+    telemetry.record_people_write(PeopleWriteEvent('retry', 4, 2, 1, 17))
+    attributes = [dict(span.attributes or {}) for span in exporter.get_finished_spans() if span.name == 'people.persistence']
+    assert any(item.get('event_kind') == 'retry' and item.get('outstanding') == 4 and item.get('in_flight') == 2 and item.get('attempt') == 1 and item.get('duration_ms') == 17 for item in attributes)
+    def broken(*args: object, **kwargs: object) -> None:
+        raise RuntimeError('SENTINEL_EXCEPTION')
+    monkeypatch.setattr(logfire, 'span', broken)
+    telemetry.record_people_write(PeopleWriteEvent('failed', 0, 0))
+    assert 'SENTINEL' not in json.dumps(attributes)
     telemetry.configure_observability(False)

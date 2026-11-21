@@ -3,7 +3,7 @@ import pytest
 
 from lumiere.domain.errors import SearchFailed
 from tests.api.conftest import Api
-from tests.fakes.search import sample_person
+from tests.fakes.search import FakePeopleQueue, sample_person
 
 
 @pytest.mark.parametrize("empty", [False, True])
@@ -153,7 +153,7 @@ async def test_real_search_deadline_preserves_admission_charge(api: Api) -> None
             return ()
 
     admission = SlowAdmission()
-    app = create_app(replace(api.services, search_people=SearchPeople(BoundedProvider(), admission, FakeClock())))
+    app = create_app(replace(api.services, search_people=SearchPeople(BoundedProvider(), admission, FakeClock(), FakePeopleQueue())))
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="https://app.test") as client:
         await client.post("/api/v1/guest-session")
         start = monotonic()
@@ -191,3 +191,20 @@ async def test_http_deadline_returns_while_cancelled_dependency_cleans_up() -> N
         assert response.status_code == 500 and response.headers["cache-control"] == "no-store"
         assert monotonic() - start < 0.15
         await asyncio.wait_for(cleaned.wait(), 1)
+
+
+@pytest.mark.parametrize('kind', ['full', 'stopped', 'broken'])
+async def test_unavailable_people_queue_keeps_success_and_cache_headers(api: Api, kind: str) -> None:
+    from dataclasses import replace
+
+    from lumiere.application.use_cases.search_people import SearchPeople
+    from lumiere.main import create_app
+    from tests.fakes.search import FakeClock, FakePeopleQueue
+    queue = FakePeopleQueue(accepted=False, error=RuntimeError('synthetic') if kind == 'broken' else None)
+    app = create_app(replace(api.services, search_people=SearchPeople(api.catalog, api.admission, FakeClock(), queue)))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://app.test') as client:
+        await client.post('/api/v1/guest-session')
+        response = await client.get('/api/v1/people/search?query=Tom')
+    assert response.status_code == 200
+    assert response.headers['cache-control'] == 'private, max-age=300'
+    assert response.json()['people'][0]['provider_id'] == 4139

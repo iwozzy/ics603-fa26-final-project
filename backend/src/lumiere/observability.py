@@ -17,13 +17,14 @@ from sqlalchemy.engine import ExceptionContext, ExecutionContext
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.application.ports.people import PeopleWriteEvent
 from lumiere.application.ports.search import PeopleSearch
 from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import SearchFailed
 from lumiere.domain.people import SearchPeopleResult
 
 _enabled = False
-_ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text"}
+_ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text", "event_kind", "outstanding", "in_flight", "attempt", "duration_ms"}
 _CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled"}
 
 
@@ -164,3 +165,8 @@ def instrument_database(engine: Engine) -> None:
     event.listen(engine, "before_cursor_execute", before)
     event.listen(engine, "after_cursor_execute", after)
     event.listen(engine, "handle_error", failed)
+
+
+def record_people_write(event: PeopleWriteEvent) -> None:
+    with safe_span("people.persistence") as attributes:
+        attributes.update(event_kind=event.kind, outstanding=event.outstanding, in_flight=event.in_flight, attempt=event.attempt, duration_ms=event.duration_ms)

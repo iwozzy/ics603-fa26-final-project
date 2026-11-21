@@ -35,3 +35,16 @@ class FakeAdmission:
 
 def sample_person(provider_id: int = 4139, *, name: str = "Tom", known_for_department: str | None = None, profile_image_url: str | None = None, known_for: tuple[str, ...] = (), provider_profile_path: str | None = None) -> PersonSummary:
     return PersonSummary(provider=CatalogProvider.TMDB, provider_id=provider_id, name=name, known_for_department=known_for_department, profile_image_url=profile_image_url, known_for=known_for, provider_profile_path=provider_profile_path)
+
+
+class FakePeopleQueue:
+    def __init__(self, accepted: bool = True, error: Exception | None = None) -> None:
+        self.accepted = accepted
+        self.error = error
+        self.batches: list[tuple[PersonSummary, ...]] = []
+
+    def enqueue(self, people: tuple[PersonSummary, ...]) -> bool:
+        if self.error is not None:
+            raise self.error
+        self.batches.append(people)
+        return self.accepted

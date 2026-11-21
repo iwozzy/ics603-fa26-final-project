@@ -10,6 +10,7 @@ from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.domain.access import CounterKey, GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from tests.fakes.accounting import running_accounting
+from tests.fakes.search import FakePeopleQueue
 
 POLICY = UsagePolicy(100, 100, 100, 100, 2, 2, 2, 3, 3, 3)
 NOW = datetime(2026, 11, 15, 23, 59, tzinfo=UTC)
@@ -51,6 +52,6 @@ async def test_storage_outage_blocks_dispatch() -> None:
     with pytest.raises(SearchFailed):
         await service.start(NOW)
     with pytest.raises(SearchFailed):
-        await SearchPeople(catalog, service, FakeClock()).execute("Tom", CONTEXT)
+        await SearchPeople(catalog, service, FakeClock(), FakePeopleQueue()).execute("Tom", CONTEXT)
     assert catalog.queries == []
     await engine.dispose()
