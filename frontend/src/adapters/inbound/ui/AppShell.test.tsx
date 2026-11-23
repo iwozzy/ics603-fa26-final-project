@@ -5,7 +5,7 @@ jest.mock('expo-router', () => ({
   usePathname: () => '/following',
   Link: ({ children, href, ...props }: { children: React.ReactNode; href: string }) => {
     const { Text } = jest.requireActual<typeof import('react-native')>('react-native');
-    return <Text {...props} accessibilityRole="link" href={href}>{children}</Text>;
+    return <Text {...props} accessibilityRole="link" {...{ href }}>{children}</Text>;
   },
 }));
 test('shell always renders both navigation destinations and highlights current route', async () => {

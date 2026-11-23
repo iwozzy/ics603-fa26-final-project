@@ -1,14 +1,15 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { Image, StyleSheet, Text, View } from 'react-native';
 import type { PersonSummary } from '../../../domain/people';
 
-export function PersonRow({ person }: { person: PersonSummary }) {
+export function PersonRow({ person, action }: { person: PersonSummary; action?: ReactNode }) {
   const [failed, setFailed] = useState(false);
   const metadata = [person.knownForDepartment?.trim(), person.knownFor.filter(title => title.trim()).slice(0, 3).join(', ')].filter(Boolean).join(' · ');
   return <View style={styles.row}>
     {person.profileImageUrl && !failed ? <Image accessibilityLabel={person.name + ' profile'} source={{ uri: person.profileImageUrl }} style={styles.photo} onError={() => setFailed(true)} /> :
       <View accessibilityRole="image" accessibilityLabel={person.name + ' silhouette'} style={styles.silhouette}><View style={styles.head} /><View style={styles.shoulders} /></View>}
     <View style={styles.details}><Text style={styles.name}>{person.name}</Text>{metadata ? <Text style={styles.metadata}>{metadata}</Text> : null}</View>
+    {action}
   </View>;
 }
 const styles = StyleSheet.create({
