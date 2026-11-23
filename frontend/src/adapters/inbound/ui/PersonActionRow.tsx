@@ -3,11 +3,13 @@ import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import type { PersonSummary } from '../../../domain/people';
 import { PersonRow } from './PersonRow';
 
+export type PersonAction = 'follow' | 'following' | 'unfollow' | 'hidden';
+
 interface Props {
-  person: PersonSummary; rowId: string; status: 'available' | 'following' | 'hidden';
-  touchSelected: boolean; onTouchSelect(rowId: string): void; onFollow(person: PersonSummary): void;
+  person: PersonSummary; rowId: string; action: PersonAction;
+  touchSelected: boolean; onTouchSelect(rowId: string): void; onActivate(person: PersonSummary): void;
 }
-export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchSelect, onFollow }: Props) {
+export function PersonActionRow({ person, rowId, action: kind, touchSelected, onTouchSelect, onActivate }: Props) {
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const modality = useRef<'mouse' | 'keyboard' | 'touch'>('keyboard');
@@ -20,7 +22,7 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
     // focus without a blur event; transfer only if focus has fallen to body.
     const node = actionRef.current as unknown as HTMLElement | null;
     if (focused && node && document.activeElement === document.body) node.focus();
-  }, [status, focused]);
+  }, [kind, focused]);
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const touch = (event: PointerEvent) => {
@@ -32,14 +34,14 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
   }, []);
   const revealed = hovered || focused || touchSelected;
   const revealStyle = { opacity: revealed ? 1 : 0, pointerEvents: revealed ? 'auto' as const : 'none' as const };
-  const action = status === 'hidden' ? null : status === 'following' ?
+  const action = kind === 'hidden' ? null : kind === 'following' ?
     <Pressable ref={actionRef} role="status" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
-    <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel="Follow +" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)}
+    <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel={kind === 'unfollow' ? 'Unfollow' : 'Follow +'} onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)}
       onPress={() => {
         if (modality.current === 'touch' && !touchActivation.current) return;
         touchActivation.current = false;
-        onFollow(person);
-      }} style={[styles.action, revealStyle, focused && styles.focused]}><Text style={styles.actionText}>Follow +</Text></Pressable>;
+        onActivate(person);
+      }} style={[styles.action, revealStyle, focused && styles.focused]}><Text style={styles.actionText}>{kind === 'unfollow' ? 'Unfollow' : 'Follow +'}</Text></Pressable>;
   const content = <PersonRow person={person} action={action} />;
   if (Platform.OS !== 'web') return <Pressable onPress={() => onTouchSelect(rowId)}>{content}</Pressable>;
   const down = (event: ReactPointerEvent<HTMLDivElement>) => {
@@ -51,7 +53,7 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
       touchActivation.current = touchSelected;
     }
   };
-  return <div data-search-row={rowId} onPointerEnter={event => { if (event.pointerType === 'mouse') { modality.current = 'mouse'; setHovered(true); } }}
+  return <div data-person-row={rowId} onPointerEnter={event => { if (event.pointerType === 'mouse') { modality.current = 'mouse'; setHovered(true); } }}
     onPointerLeave={() => setHovered(false)} onPointerDown={down}
     onPointerMove={event => {
       if (event.pointerType === 'mouse') { modality.current = 'mouse'; setHovered(true); }

@@ -117,3 +117,5 @@ test('first touch on hidden action cannot follow and result replacement clears s
   expect(within(screen.getByTestId('search-result-0')).getByRole('button')).toHaveStyle({ opacity: 0 });
   await h.unmount(); h.store.stop();
 });
+
+jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void) => { const React = jest.requireActual<typeof import('react')>('react'); React.useEffect(effect, [effect]); } }));
