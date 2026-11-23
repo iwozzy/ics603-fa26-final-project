@@ -1,12 +1,13 @@
 import { FollowingStore } from './following-store';
 import { ListFollowing } from './use-cases/list-following';
 import { FollowPerson } from './use-cases/follow-person';
+import { UnfollowPerson } from './use-cases/unfollow-person';
 import { DeferredFollowing, FakeSessions, person, snapshot } from '../test-utils/fakes/following';
 const flushPromises = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 function harness() {
   const fake = new DeferredFollowing();
   const sessions = new FakeSessions();
-  const store = new FollowingStore(new ListFollowing(fake), new FollowPerson(fake), sessions);
+  const store = new FollowingStore(new ListFollowing(fake), new FollowPerson(fake), new UnfollowPerson(fake), sessions);
   return { fake, sessions, store };
 }
 async function ready(...ids: number[]) {
@@ -169,4 +170,124 @@ test('ordinary refresh supersedes a read made obsolete by a failed mutation with
   fake.listCalls[1].resolve(snapshot(1, 2)); await obsolete;
   expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2, 1]);
   store.stop();
+});
+
+
+test('unfollow_removes_immediately_and_204_confirms_without_get', async () => {
+  const { store, fake } = await ready(3, 2, 1);
+  expect(store.requestUnfollow(person(2))).toBe(true);
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 1]);
+  expect(store.getSnapshot().canFollow).toBe(true);
+  expect(store.requestUnfollow(person(2))).toBe(false);
+  expect(store.requestUnfollow(person(99))).toBe(false);
+  await flushPromises(); expect(fake.unfollowCalls).toHaveLength(1);
+  fake.unfollowCalls[0].resolve(); await flushPromises();
+  expect(store.getSnapshot().confirmed).toEqual(snapshot(3, 1));
+  expect(fake.listCalls).toHaveLength(1); store.stop();
+});
+
+test('unfollow_failure_restores_original_order_and_manual_retry_is_safe', async () => {
+  const { store, fake } = await ready(3, 2, 1);
+  store.requestUnfollow(person(2)); await flushPromises();
+  fake.unfollowCalls[0].reject(new Error('committed but lost')); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2, 1]);
+  expect(fake.listCalls).toHaveLength(1); expect(fake.unfollowCalls).toHaveLength(1);
+  expect(store.requestUnfollow(person(2))).toBe(true); await flushPromises();
+  fake.unfollowCalls[1].resolve(); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 1]); store.stop();
+});
+
+test('mixed_intents_keep_click_order_for_same_identity', async () => {
+  const { store, fake } = await ready(2);
+  expect(store.requestFollow(person(1))).toBe(true);
+  expect(store.requestUnfollow(person(1))).toBe(true);
+  expect(store.requestFollow(person(1))).toBe(true);
+  expect(store.getSnapshot().pending.map(p => p.providerId)).toEqual([1]);
+  await flushPromises(); expect(fake.followCalls).toHaveLength(1); expect(fake.unfollowCalls).toHaveLength(0);
+  fake.followCalls[0].resolve(snapshot(1, 2)); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([1, 2]);
+  expect(fake.unfollowCalls).toHaveLength(1); expect(fake.followCalls).toHaveLength(1);
+  fake.unfollowCalls[0].resolve(); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([1, 2]);
+  expect(fake.followCalls).toHaveLength(2);
+  fake.followCalls[1].resolve(snapshot(1, 2)); await flushPromises();
+  expect(store.getSnapshot().pending).toEqual([]); store.stop();
+});
+
+test.each([true, false])('unfollow_pending_follow_does_not_resurrect_on_earlier_settlement %s', async succeeds => {
+  const { store, fake } = await ready(2);
+  store.requestFollow(person(1)); store.requestUnfollow(person(1));
+  expect(store.getSnapshot().pending).toEqual([]);
+  await flushPromises();
+  if (succeeds) fake.followCalls[0].resolve(snapshot(1, 2)); else fake.followCalls[0].reject(new Error('failed follow'));
+  await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([2]);
+  expect(fake.unfollowCalls).toHaveLength(1);
+  fake.unfollowCalls[0].resolve(); await flushPromises();
+  expect(store.getSnapshot().confirmed).toEqual(snapshot(2)); store.stop();
+});
+
+test('failed_removal_at_cap_preserves_queued_replacement', async () => {
+  const { store, fake } = await ready(3, 2, 1);
+  store.requestUnfollow(person(2)); expect(store.requestFollow(person(4))).toBe(true);
+  await flushPromises(); expect(fake.followCalls).toHaveLength(0);
+  fake.unfollowCalls[0].reject(new Error('failed')); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([4, 3, 2, 1]);
+  expect(store.getSnapshot().canFollow).toBe(false); expect(store.requestFollow(person(5))).toBe(false);
+  expect(fake.followCalls).toHaveLength(1);
+  fake.followCalls[0].reject(new Error('server cap')); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2, 1]); store.stop();
+});
+
+test('multiple_unfollows_settle_independently_and_restore_full_order', async () => {
+  const { store, fake } = await ready(3, 2, 1);
+  store.requestUnfollow(person(3)); store.requestUnfollow(person(1));
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([2]);
+  await flushPromises(); fake.unfollowCalls[0].reject(new Error('failed')); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2]);
+  fake.unfollowCalls[1].reject(new Error('failed')); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2, 1]); store.stop();
+});
+
+test('unfollow_ignores_stale_read_and_survives_navigation_and_refresh_failure', async () => {
+  const { store, fake } = await ready(3, 2, 1);
+  const read = store.refresh(); const unsubscribe = store.subscribe(() => {});
+  store.requestUnfollow(person(2)); await flushPromises(); unsubscribe();
+  expect(fake.unfollowCalls[0].signal.aborted).toBe(false);
+  fake.listCalls[1].resolve(snapshot(3, 2, 1)); await read;
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 1]);
+  const refresh = store.refresh(); fake.listCalls[2].reject(new Error('offline')); await refresh;
+  fake.unfollowCalls[0].resolve(); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 1]); store.stop();
+});
+
+test('new_guest_discards_active_and_queued_unfollows_and_late_responses', async () => {
+  const { store, fake, sessions } = await ready(3, 2, 1);
+  store.requestUnfollow(person(2)); store.requestUnfollow(person(3)); await flushPromises();
+  sessions.createGuest(); expect(fake.unfollowCalls[0].signal.aborted).toBe(true);
+  fake.unfollowCalls[0].resolve(); fake.listCalls[1].resolve(snapshot(99)); await flushPromises();
+  expect(fake.unfollowCalls).toHaveLength(1);
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([99]); store.stop();
+});
+
+test('new_guest_during_unfollow_readiness_prevents_obsolete_dispatch', async () => {
+  const { store, fake, sessions } = await ready(3, 2, 1);
+  let finish!: () => void;
+  sessions.ensureImpl = () => new Promise<void>(resolve => { finish = resolve; });
+  store.requestUnfollow(person(2)); store.requestUnfollow(person(3)); await flushPromises();
+  sessions.createGuest(); finish(); await flushPromises();
+  expect(fake.unfollowCalls).toHaveLength(0); expect(fake.listCalls).toHaveLength(2);
+  fake.listCalls[1].resolve(snapshot()); await flushPromises();
+  expect(store.getSnapshot().people).toEqual([]); store.stop();
+});
+
+test('unfollow_rejects_unknown_or_inactive_and_stop_restart_abandons_old_delete', async () => {
+  const h = harness(); expect(h.store.requestUnfollow(person(1))).toBe(false);
+  h.store.start(); expect(h.store.requestUnfollow(person(1))).toBe(false); h.store.stop();
+  const { store, fake } = await ready(1);
+  store.requestUnfollow(person(1)); await flushPromises(); store.stop();
+  expect(fake.unfollowCalls[0].signal.aborted).toBe(true);
+  expect(store.requestUnfollow(person(1))).toBe(false); store.start();
+  fake.unfollowCalls[0].resolve(); fake.listCalls[1].resolve(snapshot(1)); await flushPromises();
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([1]); store.stop();
 });

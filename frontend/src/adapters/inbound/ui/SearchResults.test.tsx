@@ -4,6 +4,7 @@ import { SearchResults } from './SearchResults';
 import { FollowingContext } from './FollowingContext';
 import { FollowingStore } from '../../../application/following-store';
 import { FollowPerson } from '../../../application/use-cases/follow-person';
+import { UnfollowPerson } from '../../../application/use-cases/unfollow-person';
 import { ListFollowing } from '../../../application/use-cases/list-following';
 import { DeferredFollowing, FakeSessions, person, snapshot } from '../../../test-utils/fakes/following';
 
@@ -12,7 +13,7 @@ afterEach(() => { jest.restoreAllMocks(); });
 const flush = async () => { for (let i = 0; i < 20; i++) await Promise.resolve(); };
 async function setup(ids = [1, 2, 3, 4], saved: number[] | null = []) {
   const fake = new DeferredFollowing();
-  const store = new FollowingStore(new ListFollowing(fake), new FollowPerson(fake), new FakeSessions());
+  const store = new FollowingStore(new ListFollowing(fake), new FollowPerson(fake), new UnfollowPerson(fake), new FakeSessions());
   store.start();
   if (saved) { fake.listCalls[0].resolve(snapshot(...saved)); await flush(); }
   const view = await render(<FollowingContext.Provider value={store}><SearchResults people={ids.map(person)} resultSetKey="Tom" /></FollowingContext.Provider>);

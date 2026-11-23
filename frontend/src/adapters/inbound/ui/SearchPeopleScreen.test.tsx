@@ -7,6 +7,7 @@ import { FollowingContext } from './FollowingContext';
 import { PeopleSearchContext } from './PeopleSearchContext';
 import { FollowingStore } from '../../../application/following-store';
 import { FollowPerson } from '../../../application/use-cases/follow-person';
+import { UnfollowPerson } from '../../../application/use-cases/unfollow-person';
 import { ListFollowing } from '../../../application/use-cases/list-following';
 import { SearchPeople } from '../../../application/use-cases/search-people';
 import { DeferredFollowing, FakeSessions, snapshot } from '../../../test-utils/fakes/following';
@@ -14,7 +15,7 @@ const placeholder = 'Search for actors, directors, or creative team to follow';
 
 test('entering and returning to Search uses local follows without another list request', async () => {
   const following = new DeferredFollowing();
-  const store = new FollowingStore(new ListFollowing(following), new FollowPerson(following), new FakeSessions());
+  const store = new FollowingStore(new ListFollowing(following), new FollowPerson(following), new UnfollowPerson(following), new FakeSessions());
   store.start();
   following.listCalls[0].resolve(snapshot(4139));
   await act(async () => { await store.refresh(); });
