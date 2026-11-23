@@ -10,7 +10,7 @@ import { SearchPeople } from '../application/use-cases/search-people';
 import { PeopleSearchContext } from '../adapters/inbound/ui/PeopleSearchContext';
 export function portsWrapper(repository: PeopleSearchRepository) {
   const searchPeople = new SearchPeople(repository);
-  const repositoryFollowing = { list: async () => snapshot(), follow: async () => snapshot() };
+  const repositoryFollowing = { unfollow: async () => {}, list: async () => snapshot(), follow: async () => snapshot() };
   const followingStore = new FollowingStore(new ListFollowing(repositoryFollowing), new FollowPerson(repositoryFollowing), new FakeSessions());
   followingStore.start();
   return function Wrapper({ children }: PropsWithChildren) { return <PeopleSearchContext.Provider value={{ searchPeople }}><FollowingContext.Provider value={followingStore}>{children}</FollowingContext.Provider></PeopleSearchContext.Provider>; };

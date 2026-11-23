@@ -6,6 +6,8 @@ export const person = (providerId = 4139): PersonSummary => ({ provider: 'tmdb',
 export const snapshot = (...ids: number[]): FollowingSnapshot => ({ people: ids.map(person), limit: 3 });
 interface Deferred { signal: AbortSignal; resolve(value: FollowingSnapshot): void; reject(error: Error): void; }
 export class DeferredFollowing implements FollowingRepository {
+  readonly unfollowCalls: { identity: PersonIdentity; signal: AbortSignal; resolve(): void; reject(error: Error): void }[] = [];
+  unfollow(identity: PersonIdentity, signal: AbortSignal): Promise<void> { return new Promise((resolve, reject) => this.unfollowCalls.push({ identity, signal, resolve, reject })); }
   readonly listCalls: Deferred[] = [];
   readonly followCalls: (Deferred & { identity: PersonIdentity })[] = [];
   list(signal: AbortSignal): Promise<FollowingSnapshot> { return new Promise((resolve, reject) => this.listCalls.push({ signal, resolve, reject })); }

@@ -1,3 +1,5 @@
+import { FollowingFailed } from '../../../domain/errors';
+import { FakeSessions } from '../../../test-utils/fakes/following';
 import { HttpFollowingRepository } from './following-repository';
 import { HttpGuestSessionRepository } from './guest-session-repository';
 import { mapFollowingSnapshot } from './following-mappers';
@@ -77,4 +79,68 @@ test('failed ordinary list marks readiness stale so the next list can discover a
   expect(await repository.list(signal())).toEqual({ people: [], limit: 3 });
   expect(bootstraps).toBe(2); expect(created.mock.calls).toEqual([[1]]);
   expect(gets).toBe(3);
+});
+
+
+test('unfollow sends identity-only DELETE and accepts empty 204 without parsing', async () => {
+  const json = jest.fn(() => { throw new Error('must not parse'); });
+  const fetcher = jest.fn(async (_url: RequestInfo | URL, _init?: RequestInit) => ({ ok: true, status: 204, json }) as unknown as Response);
+  const repository = new HttpFollowingRepository(fetcher, new FakeSessions());
+  const controller = new AbortController();
+  await expect(repository.unfollow({ provider: 'tmdb', providerId: 4139 }, controller.signal)).resolves.toBeUndefined();
+  expect(fetcher.mock.calls).toHaveLength(1);
+  expect(fetcher.mock.calls[0][0]).toBe('/api/v1/following');
+  expect(fetcher.mock.calls[0][1]).toMatchObject({ method: 'DELETE', credentials: 'same-origin', headers: { 'Content-Type': 'application/json' }, body: '{"provider":"tmdb","provider_id":4139}', signal: expect.anything() });
+  expect(json).not.toHaveBeenCalled();
+});
+
+test.each([200, 202, 500])('unfollow rejects status %s without retry, GET, or readiness invalidation', async status => {
+  const sessions = new FakeSessions();
+  const invalidate = jest.spyOn(sessions, 'invalidate');
+  const fetcher = jest.fn(async () => ({ ok: status < 400, status }) as Response);
+  const repository = new HttpFollowingRepository(fetcher, sessions);
+  await expect(repository.unfollow({ provider: 'tmdb', providerId: 4139 }, signal())).rejects.toBeInstanceOf(FollowingFailed);
+  expect(fetcher).toHaveBeenCalledTimes(1);
+  expect(invalidate).not.toHaveBeenCalled();
+});
+
+test.each([0, -1, 1.5, Number.MAX_SAFE_INTEGER + 1, true, '4139'])('unfollow rejects invalid identity %s before dispatch', async id => {
+  const fetcher = jest.fn();
+  await expect(new HttpFollowingRepository(fetcher, new FakeSessions()).unfollow({ provider: 'tmdb', providerId: id as number }, signal())).rejects.toBeInstanceOf(FollowingFailed);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+test('unfollow bootstrap failure prevents DELETE', async () => {
+  const sessions = new FakeSessions();
+  sessions.ensureImpl = async () => { throw new Error('bootstrap'); };
+  const fetcher = jest.fn();
+  await expect(new HttpFollowingRepository(fetcher, sessions).unfollow({ provider: 'tmdb', providerId: 1 }, signal())).rejects.toBeInstanceOf(FollowingFailed);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+test('unfollow cancellation during bootstrap prevents DELETE', async () => {
+  let release!: () => void;
+  const sessions = new FakeSessions();
+  sessions.ensureImpl = () => new Promise(resolve => { release = resolve; });
+  const fetcher = jest.fn();
+  const controller = new AbortController();
+  const request = new HttpFollowingRepository(fetcher, sessions).unfollow({ provider: 'tmdb', providerId: 1 }, controller.signal);
+  controller.abort(); release();
+  await expect(request).rejects.toBeInstanceOf(FollowingFailed);
+  expect(fetcher).not.toHaveBeenCalled();
+});
+
+test('unfollow deadline aborts transport and fails without retry', async () => {
+  jest.useFakeTimers();
+  try {
+    const fetcher = jest.fn((_url: RequestInfo | URL, init?: RequestInit) => new Promise<Response>((_resolve, reject) => {
+      init!.signal!.addEventListener('abort', () => reject(new Error('aborted')));
+    }));
+    const request = new HttpFollowingRepository(fetcher, new FakeSessions()).unfollow({ provider: 'tmdb', providerId: 1 }, signal());
+    const assertion = expect(request).rejects.toBeInstanceOf(FollowingFailed);
+    await jest.advanceTimersByTimeAsync(8000);
+    await assertion;
+    expect(fetcher).toHaveBeenCalledTimes(1);
+    expect(fetcher.mock.calls[0][1]!.signal!.aborted).toBe(true);
+  } finally { jest.useRealTimers(); }
 });

@@ -22,14 +22,25 @@ export class HttpFollowingRepository implements FollowingRepository {
       return await this.request(signal, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
     } catch { throw new FollowingFailed(); }
   }
-  private async request(signal: AbortSignal, init: RequestInit): Promise<FollowingSnapshot> {
+  async unfollow(identity: PersonIdentity, signal: AbortSignal): Promise<void> {
+    try {
+      const body = zFollowPersonRequest.parse({ provider: identity.provider, provider_id: identity.providerId });
+      await this.transport(signal, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }, async response => {
+        if (response.status !== 204) throw new FollowingFailed();
+      });
+    } catch { throw new FollowingFailed(); }
+  }
+  private request(signal: AbortSignal, init: RequestInit): Promise<FollowingSnapshot> {
+    return this.transport(signal, init, async response => mapFollowingSnapshot(await response.json()));
+  }
+  private async transport<T>(signal: AbortSignal, init: RequestInit, read: (response: Response) => Promise<T>): Promise<T> {
     try {
       return await withDeadline(signal, async combined => {
         await this.sessions.ensure(combined);
         if (combined.aborted) throw new FollowingFailed();
         const response = await this.fetchImpl('/api/v1/following', { ...init, credentials: 'same-origin', signal: combined });
         if (!response.ok) throw new FollowingFailed();
-        return mapFollowingSnapshot(await response.json());
+        return read(response);
       });
     } catch { throw new FollowingFailed(); }
   }
