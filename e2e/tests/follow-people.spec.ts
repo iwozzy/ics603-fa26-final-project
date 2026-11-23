@@ -74,6 +74,22 @@ test('follow people by mouse and keyboard; cap, newest-first and reload persiste
   expect(await count(request)).toBe(1);
 });
 
+test('mouse following status hides on leave and keeps its outline after reload', async ({ page }) => {
+  await page.goto('/'); await search(page); await save(page, 0);
+  const status = row(page).getByRole('status');
+  await expect(status).toHaveCSS('border-color', 'rgb(195, 199, 204)');
+  await page.mouse.move(0, 0);
+  await expect(status).toHaveCSS('opacity', '0');
+  await row(page).hover();
+  await expect(status).toHaveCSS('opacity', '1');
+  await page.reload(); await search(page);
+  await row(page).hover();
+  await expect(status).toHaveCSS('opacity', '1');
+  await expect(status).toHaveCSS('border-color', 'rgb(195, 199, 204)');
+  await page.mouse.move(0, 0);
+  await expect(status).toHaveCSS('opacity', '0');
+});
+
 test('following lost third response rolls back without GET and manual retry succeeds at cap', async ({ page, request }) => {
   let followingGets = 0;
   page.on('request', r => { if (r.url().endsWith('/following') && r.method() === 'GET') followingGets++; });

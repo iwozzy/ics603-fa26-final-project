@@ -33,8 +33,8 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
   const revealed = hovered || focused || touchSelected;
   const revealStyle = { opacity: revealed ? 1 : 0, pointerEvents: revealed ? 'auto' as const : 'none' as const };
   const action = status === 'hidden' ? null : status === 'following' ?
-    <Pressable ref={actionRef} role="status" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
-    <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel="Follow +" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)}
+    <Pressable ref={actionRef} role="status" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
+    <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel="Follow +" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)}
       onPress={() => {
         if (modality.current === 'touch' && !touchActivation.current) return;
         touchActivation.current = false;
@@ -44,8 +44,9 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
   if (Platform.OS !== 'web') return <Pressable onPress={() => onTouchSelect(rowId)}>{content}</Pressable>;
   const down = (event: ReactPointerEvent<HTMLDivElement>) => {
     modality.current = event.pointerType === 'touch' ? 'touch' : 'mouse';
+    setFocused(false);
     if (event.pointerType === 'touch') {
-      setHovered(false); setFocused(false);
+      setHovered(false);
       gesture.current = { x: event.clientX, y: event.clientY, id: event.pointerId, moved: false };
       touchActivation.current = touchSelected;
     }
@@ -65,5 +66,5 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
 }
 const styles = StyleSheet.create({
   action: { paddingVertical: 9, paddingHorizontal: 14, borderWidth: 2, borderColor: '#c3c7cc', borderRadius: 10 },
-  actionText: { fontSize: 15, color: '#343941' }, status: { fontSize: 15, color: '#6c737c', padding: 10, borderWidth: 2, borderColor: 'transparent', borderRadius: 10 }, focused: { borderColor: '#4279b2' },
+  actionText: { fontSize: 15, color: '#343941' }, status: { fontSize: 15, color: '#6c737c', padding: 10, borderWidth: 2, borderColor: '#c3c7cc', borderRadius: 10 }, focused: { borderColor: '#4279b2' },
 });

@@ -21,20 +21,50 @@ async function setup(ids = [1, 2, 3, 4], saved: number[] | null = []) {
 const pointer = (pointerType = 'touch', clientX = 0, clientY = 0) => ({ pointerType, clientX, clientY, pointerId: 1 });
 async function tap(name: string) { const node = screen.getByText(name); await fireEvent(node, 'pointerDown', pointer()); await fireEvent(node, 'pointerUp', pointer()); }
 
-test('hover and keyboard focus reveal action; mouse activation registers one follow', async () => {
+test('keyboard focus reveals action and following status after activation', async () => {
   const { fake, store, unmount } = await setup();
   const row = screen.getByTestId('search-result-0');
   const action = within(row).getByRole('button', { name: 'Follow +' });
   expect(action).toHaveStyle({ opacity: 0, pointerEvents: 'none' });
-  await fireEvent(screen.getByText('Person 1'), 'pointerEnter', pointer('mouse'));
-  expect(action).toHaveStyle({ opacity: 1 });
   await fireEvent(action, 'focus');
-  expect(action).toHaveStyle({ borderColor: '#4279b2' });
+  expect(action).toHaveStyle({ opacity: 1, borderColor: '#4279b2' });
   await fireEvent.press(action);
   expect(within(row).getByText('Following')).toBeTruthy();
   await act(flush);
   expect(fake.followCalls).toHaveLength(1);
   await unmount(); store.stop();
+});
+
+test('mouse follow hides its pending and saved status when leaving the row', async () => {
+  const { fake, store, unmount } = await setup();
+  try {
+    const name = screen.getByText('Person 1');
+    const row = within(screen.getByTestId('search-result-0'));
+    await fireEvent(name, 'pointerEnter', pointer('mouse'));
+    const action = row.getByRole('button', { name: 'Follow +' });
+    await fireEvent(action, 'pointerDown', pointer('mouse'));
+    await fireEvent(action, 'focus');
+    await fireEvent.press(action);
+    await fireEvent(name, 'pointerLeave', pointer('mouse'));
+    expect(row.getByRole('status')).toHaveStyle({ opacity: 0, pointerEvents: 'none' });
+    await act(flush);
+    await act(async () => { fake.followCalls[0].resolve(snapshot(1)); });
+    expect(row.getByRole('status')).toHaveStyle({ opacity: 0 });
+    await fireEvent(name, 'pointerEnter', pointer('mouse'));
+    expect(row.getByRole('status')).toHaveStyle({ opacity: 1, borderColor: '#c3c7cc' });
+  } finally { await unmount(); store.stop(); }
+});
+
+test('previously followed person reveals an outlined status on hover', async () => {
+  const { store, unmount } = await setup([1], [1]);
+  try {
+    const status = screen.getByRole('status');
+    expect(status).toHaveStyle({ opacity: 0 });
+    await fireEvent(screen.getByText('Person 1'), 'pointerEnter', pointer('mouse'));
+    expect(status).toHaveStyle({ opacity: 1, borderWidth: 2, borderColor: '#c3c7cc' });
+    await fireEvent(screen.getByText('Person 1'), 'pointerLeave', pointer('mouse'));
+    expect(status).toHaveStyle({ opacity: 0 });
+  } finally { await unmount(); store.stop(); }
 });
 
 test('touch first tap reveals only its row; second action tap submits and duplicate identity shares status', async () => {
