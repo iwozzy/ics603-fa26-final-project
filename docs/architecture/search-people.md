@@ -235,3 +235,9 @@ failure. Client cancellation after enqueue leaves the independent write running.
 Readiness still uses accounting health and the application pool. Two pools allow
 at most twenty checked-out connections in total, without isolating server locks or
 CPU. Future following must define how to handle missing people.
+
+## F002 amendment — 2026-11-23
+
+The [approved F002 design](../superpowers/specs/2026-11-23-F002-follow-people-design.md) and [implemented following architecture](follow-people.md) add persistent Search/Following navigation and profile-owned follows. The preceding diagrams describe the search path; a separate GET/POST `/api/v1/following` path uses the application pool and never dispatches the provider or enqueues people writes. It does not add profile flags to cached search responses. Current stored summaries and membership are read together; successful follow transactions lock the guest profile, enforce three, and await commit. A missing catalog row returns empty `500`, with optimistic rollback and manual retry only. Follow-time hydration is deferred.
+
+The sidebar survives route changes while Search draft/results/selection reset and pending search cancels. Shared optimistic following survives navigation, overlays browser-cached search identities, and loads on route entry/foreground. Initial Following loading/error/empty has blank content. Bootstrap's creation header invalidates old-guest shared state; ordinary readiness revalidation preserves it. See the F002 architecture for mouse, keyboard, touch, ordering, and failure contracts.

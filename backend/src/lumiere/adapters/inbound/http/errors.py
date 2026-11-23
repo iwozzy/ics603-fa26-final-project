@@ -13,7 +13,10 @@ def failure_response() -> Response:
 
 
 async def validation_failure(request: Request, exc: RequestValidationError) -> Response:
-    if request.url.path in {"/api/v1/people/search", "/api/v1/following"}:
+    if request.url.path == "/api/v1/following":
+        request.state.failure_category = "invalid_identity"
+        return failure_response()
+    if request.url.path == "/api/v1/people/search":
         return failure_response()
     return await request_validation_exception_handler(request, exc)
 

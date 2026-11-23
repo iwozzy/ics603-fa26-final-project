@@ -76,7 +76,7 @@ checkout capacity, while sharing database CPU, locks, and server resources.
 
 The API now carries `provider`, `provider_id`, and `known_for_department`; the
 frontend maps the latter two to `providerId` and `knownForDepartment`. Search does
-not expose the app-owned person ID. Following remains future work.
+not expose the app-owned person ID. F002 now follows existing stored people; see the dated amendment below.
 
 Source: [search orchestration](../../backend/src/lumiere/application/use_cases/search_people.py),
 [PeopleWriter](../../backend/src/lumiere/application/people_writer.py),
@@ -84,3 +84,9 @@ Source: [search orchestration](../../backend/src/lumiere/application/use_cases/s
 and [composition wiring](../../backend/src/lumiere/bootstrap.py).
 See the [approved design](../superpowers/specs/2026-11-20-search-people-persistence-design.md)
 and [full search architecture](search-people.md) for additional context.
+
+## F002 amendment — 2026-11-23
+
+The [approved F002 design](../superpowers/specs/2026-11-23-F002-follow-people-design.md) and [implemented following architecture](follow-people.md) add persistent Search/Following navigation and profile-owned follows. The preceding diagrams describe the search path; a separate GET/POST `/api/v1/following` path uses the application pool and never dispatches the provider or enqueues people writes. It does not add profile flags to cached search responses. Current stored summaries and membership are read together; successful follow transactions lock the guest profile, enforce three, and await commit. A missing catalog row returns empty `500`, with optimistic rollback and manual retry only. Follow-time hydration is deferred.
+
+The sidebar survives route changes while Search draft/results/selection reset and pending search cancels. Shared optimistic following survives navigation, overlays browser-cached search identities, and loads on route entry/foreground. Initial Following loading/error/empty has blank content. Bootstrap's creation header invalidates old-guest shared state; ordinary readiness revalidation preserves it. See the F002 architecture for mouse, keyboard, touch, ordering, and failure contracts.

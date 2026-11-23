@@ -114,3 +114,23 @@ def test_following_openapi_matches_silent_contract(api: Api) -> None:
         assert set(op['responses']) == {'200', '500'}
     assert 'X-Lumiere-Guest-Created' in document['paths']['/api/v1/guest-session']['post']['responses']['200']['headers']
     assert document['components']['schemas']['FollowPersonRequest']['additionalProperties'] is False
+
+
+async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+    from collections.abc import Iterator
+    from contextlib import contextmanager
+
+    from lumiere import observability
+    spans: list[tuple[str, dict[str, str | int]]] = []
+    @contextmanager
+    def capture(name: str) -> Iterator[dict[str, str | int]]:
+        attributes: dict[str, str | int] = {}
+        spans.append((name, attributes))
+        yield attributes
+    monkeypatch.setattr(observability, 'safe_span', capture)
+    app = create_app(api.services)
+    observability.instrument_http(app)
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://app.test') as client:
+        assert_failure(await client.post('/api/v1/following', json={'provider': 'SENTINEL_INVALID', 'provider_id': True}))
+    assert any(name == 'http.following.follow' and attributes.get('failure_category') == 'invalid_identity' for name, attributes in spans)
+    assert 'SENTINEL' not in str(spans)

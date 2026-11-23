@@ -14,6 +14,8 @@ Additional F001 revisions agreed on 2026-11-13: people-search candidates remain 
 
 F001 clarification agreed on 2026-11-13: omit IDs from the search response and decide how to capture user selection when designing following. Preserve the initial example-search guidance from the supplied wireframes; the restriction on hint messages concerns additional messages beyond those wireframes, including messages for empty results and failures.
 
+F002 amendment agreed on 2026-11-23: the [approved following design](2026-11-23-F002-follow-people-design.md) supersedes follow-time catalog creation/hydration and the associated loading/retry proposals below for this increment. Follow/list uses existing stored people only, no provider calls or hydration intent, a `follows` table, asynchronous profile-lock transactions, and a three-person guest cap. A missing person returns empty `500`; the client rolls back without an automatic retry or reconciliation read. Newest-first Following is blank during initial loading/error/empty. Persistent navigation retains shared saves while Search resets on leaving. Future timeline planning must define hydration for existing and newly created follows. See [implemented F002 architecture](../../architecture/follow-people.md).
+
 ## Intent and document authority
 
 Naming clarification agreed on 2026-11-15: the app is **Lumiere**; use `lumiere` where lowercase naming is conventional.

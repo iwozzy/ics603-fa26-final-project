@@ -63,7 +63,7 @@ TMDB ID and sorts IDs for one atomic bulk upsert; repeat writes preserve app-own
 IDs and replace all summary fields, including clearing optional values. Migration
 `0007_people` adds `people` with the approved UUID-derived 40-bit bigint default.
 
-The adapter-owned pool registry assigns guest identity, accounting and readiness
+The adapter-owned pool registry assigns guest identity, accounting, readiness, and following
 to `application`, and people writes to `people_writer`. Each pool has five retained
 connections plus five overflow, for at most twenty checkouts per backend process.
 This isolates checkout capacity; both pools still share database resources.
@@ -76,7 +76,7 @@ queues drop incoming batches without failing search. A five-second shutdown drai
 runs alongside accounting cleanup; remaining work is cancelled and awaited before
 both pools are disposed. Crashes, shutdown timeout and exhausted retries can lose
 summaries. People writer health does not gate readiness or admission. Browser-cache
-hits enqueue nothing. Following and handling a missing stored person are deferred.
+hits enqueue nothing. F002 follows require an existing stored person; a missing row returns an empty `500` and restores the client action.
 
 Before stable V1, coordinated breaking contract changes are acceptable. Search URLs
 contain only `query`; response compatibility and cache versioning are deferred.
@@ -87,3 +87,15 @@ transition handling before publishing stable V1.
 Sanitized `people.persistence` spans expose event kind, outstanding/in-flight
 counts, attempt and integer duration milliseconds without person content. See the
 [approved design](docs/superpowers/specs/2026-11-20-search-people-persistence-design.md).
+
+### Following people (2026-11-23)
+
+The persistent navigation offers Search (`/`) and Following (`/following`) even when empty. Hover or focus a search row to reveal `Follow +`; touch reveals on the first completed tap and saves on the next visible-button tap. Outside touch dismisses the action without blocking controls. Keyboard actions have a focus border and support Enter/Space. `Following` is status only; Unfollow and Movies are not offered. Leaving Search clears its query/results and cancels search work while pending follows continue above navigation.
+
+`GET /api/v1/following` returns `{"people":[],"limit":3}` for an empty profile. `POST /api/v1/following` accepts only `{"provider":"tmdb","provider_id":4139}` and returns the full snapshot using search's six summary fields. Both have `Cache-Control: no-store`, empty `500` failures, and no provider usage. Bootstrap now also returns `X-Lumiere-Guest-Created: true|false`; a newly created guest clears obsolete client follows and queued work.
+
+Migration `0008_follows` adds `follows` with guest/person foreign keys and a composite primary key. Async transactions use the `application` pool, lock the guest profile before membership/count checks, and commit before success. The named guest policy caps unique follows at three, including simultaneous requests; repeating a follow succeeds at the cap without changing its timestamp. Lists join current stored summaries in `followed_at DESC, person_id DESC` order. No person is created or updated by following.
+
+The shared client store counts unique pending plus saved identities toward three and hides remaining actions immediately. Save failure rolls back optimism without an automatic retry or list read, even after an ambiguous commit; the user can retry manually. Ordinary route/foreground reads refresh stored state and retain confirmed rows on refresh failure. Initial Following loading, failure, and empty success leave its content blank without an activity indicator. Search responses remain independently browser-cacheable with following status overlaid locally.
+
+Follow-time hydration, details/credits, timeline, authentication, and account prompts remain deferred. See [following architecture](docs/architecture/follow-people.md) and the [approved F002 design](docs/superpowers/specs/2026-11-23-F002-follow-people-design.md).
