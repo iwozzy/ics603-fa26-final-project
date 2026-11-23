@@ -33,4 +33,11 @@ def following_router(services: HttpServices) -> APIRouter:
         response.headers['Cache-Control'] = 'no-store'
         return result
 
+    @router.delete('/api/v1/following', operation_id='unfollowPerson', status_code=204, response_class=Response, responses={500: {'description': 'Following failed'}})
+    async def unfollow_person(body: FollowPersonRequest, request: Request) -> Response:
+        check_origin(request, services)
+        context = await services.guests.resolve(request.cookies.get(COOKIE_NAME), quota_ip_key(request, services), datetime.now(UTC))
+        await services.unfollow_person.execute(PersonIdentity(body.provider, body.provider_id), context)
+        return Response(status_code=204, headers={'Cache-Control': 'no-store'})
+
     return router

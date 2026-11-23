@@ -36,21 +36,24 @@ async def test_list_empty_and_follow_exact_snapshot_without_catalog_work(api: Ap
     assert not api.catalog.queries and api.admission.admissions == 0
 
 
+@pytest.mark.parametrize('method', ['POST', 'DELETE'])
 @pytest.mark.parametrize('body', [
     *({'provider': 'tmdb', 'provider_id': i} for i in (True, '4139', 1.5, 0, -1, 2**53)),
     {'provider': 'other', 'provider_id': 4139}, {}, {'provider': 'tmdb'},
     {'provider': 'tmdb', 'provider_id': 4139, 'name': 'unexpected'},
     {'provider': 'tmdb', 'provider_id': 4139, 'profile_id': 'unexpected'},
 ])
-async def test_invalid_body_is_empty_500_without_storage(api: Api, body: object) -> None:
+async def test_invalid_body_is_empty_500_without_storage(api: Api, body: object, method: str) -> None:
     await bootstrap(api)
-    assert_failure(await api.client.post('/api/v1/following', json=body))
+    assert_failure(await api.client.request(method, '/api/v1/following', json=body))
     assert api.following.operations == []
 
 
-async def test_malformed_json_is_silent(api: Api) -> None:
+@pytest.mark.parametrize('method', ['POST', 'DELETE'])
+@pytest.mark.parametrize('content', [b'{', b'\xff \xff'])
+async def test_malformed_json_is_silent(api: Api, method: str, content: bytes) -> None:
     await bootstrap(api)
-    assert_failure(await api.client.post('/api/v1/following', content='{', headers={'content-type': 'application/json'}))
+    assert_failure(await api.client.request(method, '/api/v1/following', content=content, headers={'content-type': 'application/json'}))
 
 
 async def test_missing_person_cap_and_repeat_at_three(api: Api) -> None:
@@ -108,16 +111,21 @@ async def test_success_waits_for_commit(api: Api) -> None:
 
 def test_following_openapi_matches_silent_contract(api: Api) -> None:
     document = create_app(api.services).openapi()
-    for method, operation in (('get', 'listFollowing'), ('post', 'followPerson')):
+    for method, operation in (('get', 'listFollowing'), ('post', 'followPerson'), ('delete', 'unfollowPerson')):
         op = document['paths']['/api/v1/following'][method]
         assert op['operationId'] == operation
-        assert set(op['responses']) == {'200', '500'}
+        assert set(op['responses']) == ({'204', '500'} if method == 'delete' else {'200', '500'})
+        if method == 'delete':
+            assert 'content' not in op['responses']['204']
+            assert op['requestBody']['required'] is True
+            assert set(op['requestBody']['content']) == {'application/json'}
     assert 'X-Lumiere-Guest-Created' in document['paths']['/api/v1/guest-session']['post']['responses']['200']['headers']
     assert document['components']['schemas']['FollowPersonRequest']['additionalProperties'] is False
 
 
+@pytest.mark.parametrize('method', ['POST', 'DELETE'])
 @pytest.mark.parametrize('undecodable', [False, True])
-async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pytest.MonkeyPatch, undecodable: bool) -> None:
+async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pytest.MonkeyPatch, undecodable: bool, method: str) -> None:
     from collections.abc import Iterator
     from contextlib import contextmanager
 
@@ -133,9 +141,78 @@ async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pyt
     observability.instrument_http(app)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://app.test') as client:
         if undecodable:
-            response = await client.post('/api/v1/following', content=b'\xff \xff', headers={'content-type': 'application/json'})
+            response = await client.request(method, '/api/v1/following', content=b'\xff \xff', headers={'content-type': 'application/json'})
         else:
-            response = await client.post('/api/v1/following', json={'provider': 'SENTINEL_INVALID', 'provider_id': True})
+            response = await client.request(method, '/api/v1/following', json={'provider': 'SENTINEL_INVALID', 'provider_id': True})
         assert_failure(response)
-    assert any(name == 'http.following.follow' and attributes.get('failure_category') == 'invalid_identity' for name, attributes in spans)
+    assert any(name == ('http.following.follow' if method == 'POST' else 'http.following.unfollow') and attributes.get('failure_category') == 'invalid_identity' for name, attributes in spans)
     assert 'SENTINEL' not in str(spans)
+
+
+async def test_delete_following_is_empty_204_and_idempotent(api: Api) -> None:
+    await bootstrap(api)
+    body = {'provider': 'tmdb', 'provider_id': 4139}
+    assert (await api.client.post('/api/v1/following', json=body)).status_code == 200
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(api.services)), base_url='https://app.test') as other:
+        await other.post('/api/v1/guest-session')
+        api.following.profiles.update(i.profile_id for i in api.access.tokens.values())
+        assert (await other.post('/api/v1/following', json=body)).status_code == 200
+        for i in (4139, 4139, 999):
+            response = await api.client.request('DELETE', '/api/v1/following', json={'provider': 'tmdb', 'provider_id': i})
+            assert response.status_code == 204
+            assert response.content == b''
+            assert 'content-type' not in response.headers
+            assert response.headers['cache-control'] == 'no-store'
+        assert len((await other.get('/api/v1/following')).json()['people']) == 1
+    assert (await api.client.get('/api/v1/following')).json()['people'] == []
+    assert not api.catalog.queries and api.admission.admissions == 0
+
+
+@pytest.mark.parametrize('error', [FollowingFailed('session'), SearchFailed('storage'), TimeoutError(), RuntimeError('SENTINEL_ERROR')])
+async def test_delete_commit_failures_preserve_membership(api: Api, error: Exception) -> None:
+    await bootstrap(api)
+    body = {'provider': 'tmdb', 'provider_id': 4139}
+    await api.client.post('/api/v1/following', json=body)
+    before = dict(api.following.memberships)
+    api.following.commit_error = error
+    assert_failure(await api.client.request('DELETE', '/api/v1/following', json=body))
+    assert api.following.memberships == before
+    assert not api.catalog.queries and api.admission.admissions == 0
+
+
+async def test_delete_session_and_origin_failures_are_silent(api: Api) -> None:
+    body = {'provider': 'tmdb', 'provider_id': 4139}
+    assert_failure(await api.client.request('DELETE', '/api/v1/following', json=body))
+    await bootstrap(api)
+    await api.client.post('/api/v1/following', json=body)
+    before = dict(api.following.memberships)
+    for headers in ({'origin': 'https://evil.test'}, {'sec-fetch-site': 'cross-site'}):
+        assert_failure(await api.client.request('DELETE', '/api/v1/following', json=body, headers=headers))
+    assert api.following.memberships == before
+
+
+async def test_delete_success_waits_for_commit(api: Api) -> None:
+    from typing import override
+
+    from lumiere.application.use_cases.following import UnfollowPerson
+    from tests.fakes.following import MemoryFollowingTransaction
+    await bootstrap(api)
+    body = {'provider': 'tmdb', 'provider_id': 4139}
+    await api.client.post('/api/v1/following', json=body)
+    entered, release = asyncio.Event(), asyncio.Event()
+    class BlockedCommit(MemoryFollowingTransaction):
+        @override
+        async def commit(self) -> None:
+            entered.set()
+            await release.wait()
+            await super().commit()
+    services = replace(api.services, unfollow_person=UnfollowPerson(lambda: BlockedCommit(api.following)))
+    async with httpx.AsyncClient(transport=httpx.ASGITransport(app=create_app(services)), base_url='https://app.test', cookies=api.client.cookies) as client:
+        task = asyncio.create_task(client.request('DELETE', '/api/v1/following', json=body))
+        try:
+            await asyncio.wait_for(entered.wait(), 1)
+            assert not task.done() and len(api.following.memberships) == 1
+        finally:
+            release.set()
+        assert (await task).status_code == 204
+    assert not api.following.memberships

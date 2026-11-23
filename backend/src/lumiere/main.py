@@ -38,7 +38,7 @@ def create_app(services: HttpServices) -> FastAPI:
         return Response(headers={"Cache-Control": "no-store"})
 
     document = app.openapi()
-    for path, methods in (("/api/v1/people/search", ("get",)), ("/api/v1/following", ("get", "post"))):
+    for path, methods in (("/api/v1/people/search", ("get",)), ("/api/v1/following", ("get", "post", "delete"))):
         for method in methods:
             document["paths"][path][method]["responses"].pop("422", None)
     app.openapi_schema = document

@@ -16,7 +16,11 @@ from lumiere.adapters.outbound.persistence.people_unit_of_work import (
 from lumiere.adapters.outbound.persistence.pools import PoolRegistry
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 from lumiere.application.people_writer import PeopleWriter
-from lumiere.application.use_cases.following import FollowPerson, ListFollowing
+from lumiere.application.use_cases.following import (
+    FollowPerson,
+    ListFollowing,
+    UnfollowPerson,
+)
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
@@ -100,5 +104,5 @@ def build_container(settings: Settings) -> AppContainer:
 
     people_writer = PeopleWriter(people_uows, report=record_people_write)
     search = SearchPeople(TMDBPeopleCatalog(client, report=record_catalog_counts), admission, SystemClock(), people_writer)
-    services = HttpServices(search, GuestIdentityService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds, list_following=ListFollowing(following_uows), follow_person=FollowPerson(following_uows))
+    services = HttpServices(search, GuestIdentityService(uows, policy), settings.ip_hash_key.get_secret_value().encode(), settings.trusted_proxy_cidrs, ready, search_cache_max_age_seconds=settings.search_cache_max_age_seconds, list_following=ListFollowing(following_uows), follow_person=FollowPerson(following_uows), unfollow_person=UnfollowPerson(following_uows))
     return AppContainer(observe_services(services), client, pools, admission, people_writer)

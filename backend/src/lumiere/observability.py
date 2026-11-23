@@ -17,7 +17,11 @@ from sqlalchemy.engine import ExceptionContext, ExecutionContext
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.adapters.inbound.http.deps import HttpServices
-from lumiere.application.ports.following import FollowPersonPort, ListFollowingPort
+from lumiere.application.ports.following import (
+    FollowPersonPort,
+    ListFollowingPort,
+    UnfollowPersonPort,
+)
 from lumiere.application.ports.people import PeopleWriteEvent
 from lumiere.application.ports.search import PeopleSearch
 from lumiere.domain.access import GuestContext
@@ -95,7 +99,7 @@ class ObservedSearch:
 
 
 def observe_services(services: HttpServices) -> HttpServices:
-    return replace(services, search_people=ObservedSearch(services.search_people), list_following=ObservedListFollowing(services.list_following), follow_person=ObservedFollowPerson(services.follow_person))
+    return replace(services, search_people=ObservedSearch(services.search_people), list_following=ObservedListFollowing(services.list_following), follow_person=ObservedFollowPerson(services.follow_person), unfollow_person=ObservedUnfollowPerson(services.unfollow_person))
 
 
 class HttpTelemetry:
@@ -108,7 +112,7 @@ class HttpTelemetry:
             return
         name = {"/api/v1/people/search": "http.search", "/api/v1/guest-session": "http.bootstrap"}.get(scope["path"], "http.other")
         if scope["path"] == "/api/v1/following":
-            name = "http.following.list" if scope["method"] == "GET" else "http.following.follow"
+            name = {"GET": "http.following.list", "POST": "http.following.follow", "DELETE": "http.following.unfollow"}.get(scope["method"], "http.other")
         with safe_span(name) as attributes:
             attributes["correlation_id"] = str(uuid4())
 
@@ -200,6 +204,22 @@ class ObservedFollowPerson:
         with safe_span('following.follow') as attributes:
             try:
                 return await self.inner.execute(identity, context)
+            except (FollowingFailed, SearchFailed) as error:
+                attributes['failure_category'] = error.category if error.category in _CATEGORIES else 'internal'
+                raise
+            except TimeoutError:
+                attributes['failure_category'] = 'deadline'
+                raise
+
+
+class ObservedUnfollowPerson:
+    def __init__(self, inner: UnfollowPersonPort) -> None:
+        self.inner = inner
+
+    async def execute(self, identity: PersonIdentity, context: GuestContext) -> None:
+        with safe_span('following.unfollow') as attributes:
+            try:
+                await self.inner.execute(identity, context)
             except (FollowingFailed, SearchFailed) as error:
                 attributes['failure_category'] = error.category if error.category in _CATEGORIES else 'internal'
                 raise

@@ -27,7 +27,7 @@ async def validation_failure(request: Request, exc: RequestValidationError) -> R
 
 async def http_failure(request: Request, exc: HTTPException) -> Response:
     # FastAPI raises HTTPException(400) when a JSON body cannot be decoded.
-    if request.url.path == '/api/v1/following' and request.method == 'POST' and exc.status_code == 400:
+    if request.url.path == '/api/v1/following' and request.method in {'POST', 'DELETE'} and exc.status_code == 400:
         request.state.failure_category = 'invalid_identity'
         return failure_response()
     return await http_exception_handler(request, exc)

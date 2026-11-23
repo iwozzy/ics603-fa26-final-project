@@ -8,7 +8,11 @@ import pytest
 from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.adapters.outbound.persistence.pools import PoolRegistry
 from lumiere.application.people_writer import PeopleWriter
-from lumiere.application.use_cases.following import FollowPerson, ListFollowing
+from lumiere.application.use_cases.following import (
+    FollowPerson,
+    ListFollowing,
+    UnfollowPerson,
+)
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
@@ -39,7 +43,7 @@ def container_for(access: ControlledAccess, people: ControlledPeoplePersistence)
     admission = UsageAdmissionService(access, POLICY, shutdown_timeout=.03)
     writer = PeopleWriter(people, shutdown_timeout=.03)
     pools = PoolsProbe(access, people)
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), writer), GuestIdentityService(access, POLICY), b'synthetic-test-key', list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()))
+    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), writer), GuestIdentityService(access, POLICY), b'synthetic-test-key', list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()), unfollow_person=UnfollowPerson(MemoryFollowing()))
     return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, pools), admission, writer), pools
 
 
@@ -137,6 +141,7 @@ async def test_runtime_assigns_distinct_named_factories_and_instruments_both(mon
         assert engines == [application.engine.sync_engine, people.engine.sync_engine]
         assert container.services.follow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.services.list_following.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
+        assert container.services.unfollow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.admission.uow_factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.people_writer.uow_factory().factory is people.sessions  # type: ignore[attr-defined]
         for pool in (application, people):

@@ -198,6 +198,28 @@
   "openapi": "3.1.0",
   "paths": {
     "/api/v1/following": {
+      "delete": {
+        "operationId": "unfollowPerson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowPersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "204": {
+            "description": "Successful Response"
+          },
+          "500": {
+            "description": "Following failed"
+          }
+        },
+        "summary": "Unfollow Person"
+      },
       "get": {
         "operationId": "listFollowing",
         "responses": {

@@ -113,6 +113,29 @@ export type ValidationError = {
     type: string;
 };
 
+export type UnfollowPersonData = {
+    body: FollowPersonRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/following';
+};
+
+export type UnfollowPersonErrors = {
+    /**
+     * Following failed
+     */
+    500: unknown;
+};
+
+export type UnfollowPersonResponses = {
+    /**
+     * Successful Response
+     */
+    204: void;
+};
+
+export type UnfollowPersonResponse = UnfollowPersonResponses[keyof UnfollowPersonResponses];
+
 export type ListFollowingData = {
     body?: never;
     path?: never;
