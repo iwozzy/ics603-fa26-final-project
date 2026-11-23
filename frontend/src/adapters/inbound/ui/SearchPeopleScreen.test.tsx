@@ -1,9 +1,39 @@
-import { act, fireEvent, screen } from '@testing-library/react-native';
+import { act, fireEvent, render, screen } from '@testing-library/react-native';
 import { DeferredRepository, result } from '../../../test-utils/fakes/people-search';
 import { renderWithPorts } from '../../../test-utils/renderWithPorts';
 import SearchPeopleScreen from './SearchPeopleScreen';
 import { PersonRow } from './PersonRow';
+import { FollowingContext } from './FollowingContext';
+import { PeopleSearchContext } from './PeopleSearchContext';
+import { FollowingStore } from '../../../application/following-store';
+import { FollowPerson } from '../../../application/use-cases/follow-person';
+import { ListFollowing } from '../../../application/use-cases/list-following';
+import { SearchPeople } from '../../../application/use-cases/search-people';
+import { DeferredFollowing, FakeSessions, snapshot } from '../../../test-utils/fakes/following';
 const placeholder = 'Search for actors, directors, or creative team to follow';
+
+test('entering and returning to Search uses local follows without another list request', async () => {
+  const following = new DeferredFollowing();
+  const store = new FollowingStore(new ListFollowing(following), new FollowPerson(following), new FakeSessions());
+  store.start();
+  following.listCalls[0].resolve(snapshot(4139));
+  await act(async () => { await store.refresh(); });
+  const repository = new DeferredRepository();
+  const searchPeople = new SearchPeople(repository);
+  const content = <PeopleSearchContext.Provider value={{ searchPeople }}><FollowingContext.Provider value={store}><SearchPeopleScreen /></FollowingContext.Provider></PeopleSearchContext.Provider>;
+  try {
+    for (let entry = 0; entry < 2; entry++) {
+      const view = await render(content);
+      try {
+        await fireEvent.changeText(screen.getByPlaceholderText(placeholder), 'Tom');
+        await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+        await act(() => repository.calls[entry].resolve(result('Tom')));
+        expect(screen.getByRole('status')).toBeTruthy();
+        expect(following.listCalls).toHaveLength(1);
+      } finally { await view.unmount(); }
+    }
+  } finally { store.stop(); }
+});
 
 test('wireframe copy and keyboard/pointer submission without typing dispatch', async () => {
   const repository = new DeferredRepository();
