@@ -41,4 +41,6 @@
 
 Authorization: the owner approved this exact simplification in the current conversation; continue inline without another handoff approval.
 
-Execution: implemented inline under the owner's approval. RED: 4 focused unit/API and 10 persistence failures. GREEN: 74 focused unit/API, full `make test` (267 backend and 108 frontend), 80 disposable PostgreSQL tests, and deterministic contract generation with no drift. Sequential `make lint` passed; final fresh-context review pending. No frontend code or HTTP schema changed.
+Execution: implemented inline under the owner's approval. RED: 4 focused unit/API and 10 persistence failures. GREEN: 74 focused unit/API, full `make test` (267 backend and 108 frontend), 80 disposable PostgreSQL tests, and deterministic contract generation with no drift. Sequential `make lint` passed. Fresh-context review found no Critical/Important issue or production defect; two Minor test-strengthening suggestions are deferred. No frontend code or HTTP schema changed.
+
+Deferred review minors: add a PostgreSQL commit-event assertion for zero-match cases (the use-case unit tests already verify commit); prove the cancellation case reaches an actual database row-lock wait and returns the pool to its baseline rather than relying on pre-query readiness and a later successful request. The existing rollback/cancellation implementation is unchanged. Review verdict: ready to merge; the branch remains local under the approved scope.
