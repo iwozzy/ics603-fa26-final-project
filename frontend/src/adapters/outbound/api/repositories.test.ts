@@ -4,7 +4,7 @@ import { HttpPeopleSearchRepository } from './people-search-repository';
 
 const payload = { query: 'Tom', people: [{ provider: 'tmdb', provider_id: 4139, name: 'Tom', known_for_department: null, profile_image_url: null, known_for: ['Alien'], id: 42 }] };
 function response(status: number, body: unknown = payload): Response {
-  return { ok: status === 200, status, json: async () => body } as Response;
+  return { ok: status === 200, status, headers: new Headers({ 'X-Lumiere-Guest-Created': 'false' }), json: async () => body } as Response;
 }
 function harness(searchResponse = response(200)) {
   const fetcher = jest.fn<ReturnType<typeof fetch>, [input: RequestInfo | URL, init?: RequestInit]>().mockImplementation(async (url) => url === '/api/v1/guest-session' ? response(200) : searchResponse);
