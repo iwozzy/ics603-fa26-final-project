@@ -69,7 +69,7 @@ test('follow people by mouse and keyboard; cap, newest-first and reload persiste
   const names = await page.locator('body').innerText();
   expect(names.indexOf('Tom Hanks')).toBeLessThan(names.indexOf('Tom Holland'));
   expect(names.indexOf('Tom Holland')).toBeLessThan(names.indexOf('Tom Skerritt'));
-  await expect(page.getByText('Unfollow', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: 'Unfollow' })).toHaveCount(3);
   await page.reload(); await expect(page.getByText('Tom Hanks', { exact: true })).toBeVisible();
   expect(await count(request)).toBe(1);
 });

@@ -8,6 +8,15 @@ reconciliation reads, the `follows` table name, asynchronous database I/O, and
 search state reset on navigation. Author decisions and proposals below were
 accepted with this approval; explicitly deferred features remain deferred.
 
+## Approved amendment (2026-11-23)
+
+The [unfollow design](2026-11-23-F002-unfollow-people-design.md) extends this
+contract: Following offers shared reveal-style Unfollow, optimistic removal,
+ordered follow/unfollow intents, idempotent DELETE with empty 204, and rollback
+without reconciliation. It reuses the existing schema and profile lock, with no
+provider work. The amendment governs removal; Search's Following remains status.
+Actual refresh triggers are startup, Following entry, and new guest creation.
+
 ## Intent and scope
 
 Let guests save the actors, directors, and other creative contributors they find
@@ -30,7 +39,7 @@ boundaries and existing search behavior.
   another result, hides its action. Tapping another result reveals that result's
   action instead.
 - Clicking `Follow +` immediately changes it to `Following`. A failed save restores
-  `Follow +`. There is no unfollow action in this feature.
+  `Follow +`. Unfollow is available on Following under the approved amendment.
 - Guests can follow at most three people, as established in the architecture.
   At the limit, remaining `Follow +` actions are hidden. The backend also rejects
   attempts to add further follows. Account creation prompts are a separate feature.
@@ -47,7 +56,7 @@ boundaries and existing search behavior.
   and yield to the event loop while waiting.
 - Search input and results do not need to survive switching between Search and
   Following; keep search state local to its screen and reset it on leaving.
-- Full person details, movie credits, timeline hydration, unfollow, registration,
+- Full person details, movie credits, timeline hydration, registration,
   and account prompts are deferred. The captured
   [details and movie credits response](../../samples/api/tmdb/v3/people/details_movie_credits.json)
   is context for a later feature, not a dependency of F002.
@@ -111,7 +120,7 @@ shows both sidebar entries before any follows. The
 [success wireframe](../../samples/wireframes/F002-follow-people-success-wireframe.png)
 shows the result action's changed label. The
 [Following wireframe](../../samples/wireframes/F002-following-screen-wireframe.png)
-supplies the list arrangement; omit its Unfollow action.
+supplies the list arrangement and Unfollow action under the approved amendment.
 
 ```text
 Lumière              Search
@@ -187,7 +196,7 @@ optimistic action, restore `Follow +` subject to the usual reveal rules, and let
 the user retry. Do not automatically repeat the mutation or trigger a list read
 because the mutation failed, including for cap rejection or an ambiguous commit.
 The client may temporarily disagree with saved state until a deliberate retry or
-an ordinary navigation/foreground list load obtains current data. Successful
+an ordinary Following-entry/startup/new-guest list load obtains current data. Successful
 repeat requests do not duplicate a follow, including when the guest is already
 at three, and preserve the original follow timestamp.
 
@@ -345,12 +354,12 @@ following so bootstrap requests are shared.
 Keep one following state owner above both routes. Its confirmed snapshot, pending
 identities, load state, and mutation lifecycle survive navigation. A pending follow
 must settle even if its originating search row unmounts. Reuse PersonRow display
-content for Following without attaching search selection behavior there.
+content and reveal interactions through shared PersonActionRow/PersonActionList components for Search and Following.
 
 Author decisions for bounded synchronization:
 
-- Load following on application entry, and refresh when either route is entered
-  again or the browser returns to the foreground. Deduplicate equivalent in-flight
+- Load following on application entry, Following entry, and new guest creation.
+  Search entry and foreground events do not refresh following. Deduplicate equivalent in-flight
   reads. Failure handling follows the rules above; no polling or cross-tab event
   infrastructure is added.
 - Optimistically register each accepted click immediately, but send follow
@@ -423,7 +432,7 @@ Verification must cover:
   overlay over browser-cached results; mouse hover into the button; keyboard focus
   and activation; touch first-tap reveal, second-tap activation, switching rows,
   outside dismissal, and scrolling without activation. Verify touch dismissal is
-  not defeated by synthesized hover/focus. No Unfollow or Movies action appears.
+  not defeated by synthesized hover/focus. Following offers Unfollow under the approved amendment; Movies remains absent.
 - Contract generation, affected tests, lint, type checks, and existing architecture
   import checks. Use the disposable integration/e2e harnesses and fixture provider;
   do not use live TMDB or the application database. Browser checks must accommodate
