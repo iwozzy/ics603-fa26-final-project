@@ -29,9 +29,12 @@ class PostgresFollowingRepository:
     async def count(self, profile_id: UUID) -> int:
         return (await self.session.scalar(select(func.count()).select_from(FollowRow).where(FollowRow.profile_id == profile_id))) or 0
 
-    async def remove(self, profile_id: UUID, person_id: int) -> None:
+    async def remove(self, profile_id: UUID, identity: PersonIdentity) -> None:
         await self.session.execute(delete(FollowRow).where(
-            FollowRow.profile_id == profile_id, FollowRow.person_id == person_id))
+            FollowRow.profile_id == profile_id,
+            FollowRow.person_id == PersonRow.id,
+            PersonRow.tmdb_id == identity.provider_id,
+        ).execution_options(synchronize_session=False))
 
     async def add(self, profile_id: UUID, person_id: int) -> None:
         self.session.add(FollowRow(profile_id=profile_id, person_id=person_id))

@@ -68,9 +68,12 @@ class MemoryFollowingTransaction:
         self.store.operations.append('count')
         return sum(owner == profile_id for owner, _ in self.memberships)
 
-    async def remove(self, profile_id: UUID, person_id: int) -> None:
+    async def remove(self, profile_id: UUID, identity: PersonIdentity) -> None:
         self.store.operations.append('remove')
-        self.memberships.pop((profile_id, person_id), None)
+        for person_id, person in self.store.people.items():
+            if (person.provider, person.provider_id) == (identity.provider, identity.provider_id):
+                self.memberships.pop((profile_id, person_id), None)
+                break
 
     async def add(self, profile_id: UUID, person_id: int) -> None:
         self.store.operations.append('add')

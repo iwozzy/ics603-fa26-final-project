@@ -216,3 +216,15 @@ async def test_delete_success_waits_for_commit(api: Api) -> None:
             release.set()
         assert (await task).status_code == 204
     assert not api.following.memberships
+
+
+async def test_delete_resolved_guest_with_missing_profile_is_empty_204(api: Api) -> None:
+    await bootstrap(api)
+    api.following.profiles.clear()
+    response = await api.client.request('DELETE', '/api/v1/following', json={'provider': 'tmdb', 'provider_id': 4139})
+    assert response.status_code == 204
+    assert response.content == b''
+    assert 'content-type' not in response.headers
+    assert response.headers['cache-control'] == 'no-store'
+    assert api.following.commits == 1
+    assert not api.catalog.queries and api.admission.admissions == 0

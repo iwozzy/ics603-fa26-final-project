@@ -92,20 +92,34 @@ success and failure. Preserve empty `500` failures for invalid input, origin,
 session, storage, or deadline errors. Document `204` with no response body and
 remove the default advertised `422` for this operation in generated OpenAPI.
 
+### Approved simplification (2026-11-23)
+
+After reviewing the three-query implementation, the owner approved a single
+joined DELETE and accepted the revised missing-profile and concurrency behavior.
+This supersedes the original requirement that Unfollow lock and verify the guest
+profile before looking up the person.
+
 Use a framework-independent unfollow use case and repository removal operation.
-In a fresh async transaction, lock the resolved guest profile with the same
-`SELECT ... FOR UPDATE` used by follow, reject a missing profile, resolve the
-local person, and delete only that profile's relationship. An already absent
-relationship, including a provider identity absent from the local catalog,
-succeeds without changing anything. Await commit before acknowledging `204`.
+In a fresh async transaction, delete the relationship using one parameterized
+`DELETE FROM follows USING people`, filtering the resolved profile ID, the
+person join, and the requested provider identity. An absent profile, person, or
+relationship is a successful no-op after guest identity resolution; missing or
+invalid guest credentials still fail. Await commit before acknowledging `204`.
 Never call TMDB, create/update people, change other follows' timestamps, or return
 internal IDs. Retain bounded cancellation and rollback cleanup.
+
+Follow retains its profile lock around count-and-insert and the three-person cap.
+Unfollow does not acquire that lock. Concurrent requests across clients resolve
+according to PostgreSQL visibility and row locking: an uncommitted Follow can be
+invisible to Unfollow and remain after it commits. The shared client queue still
+preserves click order within one application instance. No cross-client mutation
+ordering or automatic retry is added.
 
 ## Verification and documentation
 
 Verify durable deletion and repeated deletion, profile isolation, missing person
 and invalid identity behavior, commit/rollback failures, concurrent follow/delete
-serialization and cap enforcement, and the empty `204`/`500` contracts. Verify
+visibility and Follow cap enforcement, and the empty `204`/`500` contracts. Verify
 optimistic removal/rollback/order, mixed queued intents, replacement at the cap,
 stale responses, new guests, navigation, and no mutation-triggered list request.
 Browser coverage must exercise mouse, keyboard, real touch, reload persistence,

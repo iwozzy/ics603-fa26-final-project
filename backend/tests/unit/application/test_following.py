@@ -125,7 +125,7 @@ async def test_unfollow_commits_only_owned_relationship(store: MemoryFollowing, 
     assert await UnfollowPerson(store).execute(identity(), context) is None
     before.pop((context.profile_id, 4139))
     assert store.memberships == before
-    assert store.operations == ['enter', 'lock_profile', 'find_person', 'remove', 'commit']
+    assert store.operations == ['enter', 'remove', 'commit']
 
 
 async def test_unfollow_absent_relationship_and_person_are_idempotent(store: MemoryFollowing, context: GuestContext) -> None:
@@ -133,13 +133,14 @@ async def test_unfollow_absent_relationship_and_person_are_idempotent(store: Mem
         assert await UnfollowPerson(store).execute(identity(i), context) is None
     assert store.memberships == {}
     assert store.commits == 3
-    assert not {'add', 'count', 'list_people'}.intersection(store.operations)
+    assert store.operations == ['enter', 'remove', 'commit'] * 3
 
 
-async def test_unfollow_rejects_missing_profile(store: MemoryFollowing) -> None:
-    with pytest.raises(FollowingFailed, match='session'):
-        await UnfollowPerson(store).execute(identity(), GuestContext(uuid4(), 'other'))
-    assert store.operations == ['enter', 'lock_profile', 'rollback']
+async def test_unfollow_missing_profile_is_a_committed_no_op(store: MemoryFollowing) -> None:
+    assert await UnfollowPerson(store).execute(identity(), GuestContext(uuid4(), 'other')) is None
+    assert store.memberships == {}
+    assert store.operations == ['enter', 'remove', 'commit']
+    assert store.commits == 1
 
 
 async def test_unfollow_commit_failure_preserves_membership(store: MemoryFollowing, context: GuestContext) -> None:

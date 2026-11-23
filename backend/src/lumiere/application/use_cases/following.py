@@ -50,9 +50,5 @@ class UnfollowPerson:
                 or not 1 <= identity.provider_id <= MAX_PROVIDER_ID):
             raise FollowingFailed('invalid_identity')
         async with self.factory() as uow:
-            if not await uow.follows.lock_profile(context.profile_id):
-                raise FollowingFailed('session')
-            person_id = await uow.follows.find_person(identity)
-            if person_id is not None:
-                await uow.follows.remove(context.profile_id, person_id)
+            await uow.follows.remove(context.profile_id, identity)
             await uow.commit()

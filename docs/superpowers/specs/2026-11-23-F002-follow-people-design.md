@@ -13,8 +13,9 @@ accepted with this approval; explicitly deferred features remain deferred.
 The [unfollow design](2026-11-23-F002-unfollow-people-design.md) extends this
 contract: Following offers shared reveal-style Unfollow, optimistic removal,
 ordered follow/unfollow intents, idempotent DELETE with empty 204, and rollback
-without reconciliation. It reuses the existing schema and profile lock, with no
-provider work. The amendment governs removal; Search's Following remains status.
+without reconciliation. It reuses the existing schema with no provider work. The owner's approved
+simplification uses a single joined DELETE without an Unfollow profile lock;
+Follow retains its lock and cap. The amendment governs removal; Search's Following remains status.
 Actual refresh triggers are startup, Following entry, and new guest creation.
 
 ## Intent and scope
@@ -329,8 +330,10 @@ For POST, after resolving the requesting guest:
 5. Read the resulting following snapshot in `followed_at DESC, person_id DESC`
    order, commit, then return HTTP `200`. GET uses the same ordering.
 
-All F002 mutations must take the same profile lock before checking membership and
-count. The composite key also prevents duplicate rows. Count and insert must never
+Follow additions must take the profile lock before checking membership and
+count. The approved Unfollow simplification performs one joined DELETE without
+that profile lock; its revised concurrency contract is in the unfollow amendment.
+The composite key also prevents duplicate rows. Count and insert must never
 be separate transactions. The three-follow rule belongs to the use case; locking,
 lookup queries, and constraints belong to adapters behind ports. Represent the
 guest limit as a named application policy value of three; no new environment
