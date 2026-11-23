@@ -10,6 +10,8 @@
 
 **Spec:** [Approved F002 design](../specs/2026-11-23-F002-follow-people-design.md). Read it before implementing this plan.
 
+**Status:** Approved by the owner in conversation on 2026-11-23. The owner will choose the execution approach in a separate session; implementation has not started.
+
 ## Global Constraints
 
 - A follow request contains only `provider` and `provider_id`.
@@ -266,4 +268,6 @@ expect(followPosts).toBe(postsBeforeFirstTap);
 
 The task mapping covers every design section: identity/cap/idempotency (1–3), async storage and migration safety (2), HTTP/header/telemetry (3–4), client ordering/races/manual retry/identity lifecycle (4–5), navigation/blank loading/search reset (6), input interactions and duplicates (7), and real-browser/cache behavior plus architecture updates (8). Review Focus conditions each have named owning tests. Shared signatures in Interfaces blocks are the contracts between tasks.
 
-This plan changes no runtime code until execution is selected. Recommended execution: **Native**, because these eight tasks share contracts and one client state lifecycle, so retaining context avoids repeated handoffs; a whole-branch independent review still checks the result. The alternative is **Subagent-driven**, with a fresh implementer/reviewer gate per task and a final whole-branch review, at higher context cost.
+The owner approved this plan on 2026-11-23 and explicitly deferred choosing the execution approach to a separate session. Resume by obtaining that choice; design and plan approval are already recorded. All implementation steps remain pending.
+
+The author's recommendation remains **Native**, because these eight tasks share contracts and one client state lifecycle, so retaining context avoids repeated handoffs; a whole-branch independent review still checks the result. The alternative is **Subagent-driven**, with a fresh implementer/reviewer gate per task and a final whole-branch review, at higher context cost. Neither approach has been selected.
