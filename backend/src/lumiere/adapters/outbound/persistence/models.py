@@ -1,8 +1,10 @@
+from datetime import datetime
 from uuid import UUID
 
 from sqlalchemy import (
     BigInteger,
     CheckConstraint,
+    DateTime,
     ForeignKey,
     LargeBinary,
     String,
@@ -58,3 +60,10 @@ class PersonRow(Base):
     name: Mapped[str] = mapped_column(Text, nullable=False)
     known_for: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
     tmdb_profile_path: Mapped[str | None] = mapped_column(Text)
+
+
+class FollowRow(Base):
+    __tablename__ = 'follows'
+    profile_id: Mapped[UUID] = mapped_column(ForeignKey('guest_profiles.id'), primary_key=True)
+    person_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('people.id'), primary_key=True)
+    followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text('clock_timestamp()'))

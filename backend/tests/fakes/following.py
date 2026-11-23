@@ -3,6 +3,7 @@ from types import TracebackType
 from typing import Self
 from uuid import UUID
 
+from lumiere.application.ports.following import FollowingRepository
 from lumiere.domain.following import PersonIdentity
 from lumiere.domain.people import PersonSummary
 
@@ -26,7 +27,7 @@ class MemoryFollowingTransaction:
     def __init__(self, store: MemoryFollowing) -> None:
         self.store = store
         self.memberships = dict(store.memberships)
-        self.follows = self
+        self.follows: FollowingRepository = self
         self.committed = False
 
     async def __aenter__(self) -> Self:
