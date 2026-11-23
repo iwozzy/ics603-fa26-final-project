@@ -2,9 +2,11 @@
 
 Date: 2026-11-23
 
-Status: Draft for owner review. Product decisions below were established in
-conversation; the document as a whole has not been approved. Items identified as
-author decisions are proposals covered by the eventual document approval.
+Status: Approved by the owner in conversation on 2026-11-23 after the revisions
+covering newest-first ordering, blank initial loading, manual retry without
+reconciliation reads, the `follows` table name, asynchronous database I/O, and
+search state reset on navigation. Author decisions and proposals below were
+accepted with this approval; explicitly deferred features remain deferred.
 
 ## Intent and scope
 
@@ -446,4 +448,4 @@ guest cap, persistence guarantees, newest-first ordering, blank initial loading,
 manual retry, asynchronous database I/O, table name, touch interaction, search
 state reset, or deferred scope require an explicit design revision. The author's
 proposed endpoint/response shape, tie breaker, error conventions, and remaining
-synchronization defaults are subject to the owner's review of this draft.
+synchronization defaults were accepted with the owner's approval of this document.
