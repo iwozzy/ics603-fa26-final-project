@@ -37,6 +37,14 @@ boundaries and existing search behavior.
   exists. A missing person returns HTTP `500`, and the client restores `Follow +`.
 - Following displays the person summary information already captured during
   search: photo or fallback silhouette, name, department, and recognition titles.
+- Following lists people in most recently followed order. Initial loading and
+  initial load failures leave the content area blank, with no activity indicator.
+- A lost response after commit is treated as a save failure: restore `Follow +`
+  and let the user retry. Do not trigger a list refresh to reconcile the failure.
+- The new table is named `follows`. Follow/list database I/O must be asynchronous
+  and yield to the event loop while waiting.
+- Search input and results do not need to survive switching between Search and
+  Following; keep search state local to its screen and reset it on leaving.
 - Full person details, movie credits, timeline hydration, unfollow, registration,
   and account prompts are deferred. The captured
   [details and movie credits response](../../samples/api/tmdb/v3/people/details_movie_credits.json)
@@ -149,7 +157,8 @@ same pending or saved state.
 
 ### Optimism, limits, and failures
 
-Author decisions for client state:
+The owner's ordering, loading, and retry decisions apply below. Other client
+state details in this section are author proposals:
 
 - Count unique saved plus pending provider identities toward the client limit.
   Clicking the third immediately hides all remaining `Follow +` actions, including
@@ -161,21 +170,24 @@ Author decisions for client state:
 - Use current stored summaries for saved follows, rather than retaining a frozen
   per-follow copy of the search result. Catalog summary updates can change the
   Following display without altering follow ownership.
-- List people in first-follow order, oldest first, with person ID as a stable tie
-  breaker. Repeating a follow preserves its original position.
-- An empty successful list is a blank content area. While initially loading, show
-  a modest activity indicator. On an initial load failure, stop the indicator and
-  leave the area blank. Retain previously confirmed data on refresh failure.
+- List people in most recently followed order (`followed_at DESC`), with person
+  ID descending as the author's stable tie breaker. Repeating an existing follow
+  preserves its original timestamp and does not move it to the top.
+- An empty successful list, initial loading, and an initial load failure all leave
+  the content area blank. Show no loading or activity indicator on Following.
+  Retain previously confirmed data on an ordinary refresh failure.
   Track failure separately from a confirmed empty list internally. Do not offer
   new follows until the initial saved-follow state is known.
 
 A lost response can occur after commit, so HTTP/client failure cannot prove a
-follow was not saved. First roll back the optimistic action on any failed request,
-then make one bounded list refresh to reconcile. A saved follow discovered by that
-refresh becomes `Following` again. Do not automatically repeat a failed mutation.
-If the refresh also fails, retain confirmed state and permit a deliberate retry
-subject to the known limit; the backend remains authoritative. Successful repeat
-requests do not duplicate a follow, including when the guest is already at three.
+follow was not saved. Treat any failed request as a save failure: roll back that
+optimistic action, restore `Follow +` subject to the usual reveal rules, and let
+the user retry. Do not automatically repeat the mutation or trigger a list read
+because the mutation failed, including for cap rejection or an ambiguous commit.
+The client may temporarily disagree with saved state until a deliberate retry or
+an ordinary navigation/foreground list load obtains current data. Successful
+repeat requests do not duplicate a follow, including when the guest is already
+at three, and preserve the original follow timestamp.
 
 ## HTTP contracts
 
@@ -261,14 +273,14 @@ and deliberate identity transitions remain part of authentication planning.
 
 ## Persistence and transaction rules
 
-Author decision: add `person_follows` in the next forward Alembic migration after
+Add the owner-named `follows` table in the next forward Alembic migration after
 the current migration head (`0007_people` at design time).
 
 | Column | Storage and rules |
 | --- | --- |
 | `profile_id` | UUID, non-null FK to existing `guest_profiles.id` |
 | `person_id` | bigint, non-null FK to `people.id` |
-| `followed_at` | timezone-aware timestamp, non-null, assigned on insertion |
+| `followed_at` | timezone-aware timestamp, non-null, assigned when the insert executes after acquiring the profile lock |
 
 Use `(profile_id, person_id)` as the composite primary key. Follow state references
 the app-owned person ID; TMDB identity remains a catalog lookup concern. The
@@ -276,10 +288,19 @@ existing profile table is sufficient for this guest-only feature; do not introdu
 another profile abstraction or authentication schema. Preserve existing guest and
 person data in the migration. Downgrade removes only F002 follow data/schema.
 
-Use the existing `application` pool for synchronous follow/list operations. The
-people-writer pool remains dedicated to background person writes. Use an
-application-owned following unit-of-work port backed by a fresh adapter session per
-operation. Domain/application layers do not import ORM, HTTP, or provider clients.
+Use the existing `application` pool for asynchronous follow/list operations with
+the existing SQLAlchemy async sessions and async PostgreSQL driver. Await
+connection checkout, queries, lock waits, and commit/rollback so I/O yields to the
+event loop. Keep blocking database calls out of async handlers and use cases;
+adding `async def` around a synchronous driver is insufficient. Each HTTP request
+awaits its operation and commit before returning; this completion guarantee does
+not require blocking the event loop or enqueueing the write in the background.
+
+The people-writer pool remains dedicated to background person writes. Use an
+application-owned following unit-of-work port backed by a fresh async adapter
+session per operation, with awaitable repository and transaction methods. Do not
+share active sessions across concurrent requests. Domain/application layers do
+not import ORM, HTTP, or provider clients.
 
 For POST, after resolving the requesting guest:
 
@@ -294,7 +315,8 @@ For POST, after resolving the requesting guest:
    `followed_at`, even at the cap.
 4. Otherwise count existing follows under the same profile lock. At three, reject
    and roll back. Below three, insert the follow.
-5. Read the resulting following snapshot, commit, then return HTTP `200`.
+5. Read the resulting following snapshot in `followed_at DESC, person_id DESC`
+   order, commit, then return HTTP `200`. GET uses the same ordering.
 
 All F002 mutations must take the same profile lock before checking membership and
 count. The composite key also prevents duplicate rows. Count and insert must never
@@ -305,8 +327,8 @@ configuration or durable usage counter is needed for current follow count.
 
 GET requires no profile write lock. Both endpoints require storage availability,
 even if the guest identity is cached. Preserve bounded request deadlines and
-transaction cancellation cleanup. A follow is never queued or acknowledged on a
-best-effort basis. Restart persistence of follows does not depend on single-process
+transaction cancellation cleanup. The backend never queues a follow write or
+acknowledges it on a best-effort basis. Persistence across restarts does not depend on single-process
 in-memory state, though the existing search accounting deployment remains limited
 to one backend process.
 
@@ -338,21 +360,24 @@ Author decisions for bounded synchronization:
   Following rows, use the selected search summary until the server supplies its
   stored summary. Remove that optimistic row if saving fails.
 - Guard list responses against obsolete state: a read begun before a mutation may
-  not overwrite that mutation's result. Invalidate superseded reads and schedule a
-  fresh read when needed; completion ordering must not restore an older snapshot.
+  not overwrite that mutation's result. Ignore superseded reads; completion
+  ordering must not restore an older snapshot. Mutation success supplies its own
+  snapshot; mutation failure does not trigger a replacement list request.
   Apply the guest-generation rules above when bootstrap reports a newly created
   profile. A transient search failure must not discard confirmed follows merely
   because the existing session adapter marks its bootstrap readiness stale.
 - Other tabs can temporarily display stale counts. Backend cap rejection followed
-  by the one bounded refresh reconciles them. Immediate real-time synchronization
-  between tabs is outside scope.
+  by optimistic rollback leaves that stale count in place until an ordinary list
+  load. Do not add a failure-triggered reconciliation read or immediate real-time
+  synchronization between tabs.
 
-Keep search input/results when switching between Search and Following during the
-same app session. Author decision: lift search interaction state above route
-unmounts or retain its screen instance; the builder chooses the mechanism. This
-avoids requiring another charged search just to return to the results. Existing
-query validation, cancellation of superseded searches, response ordering, and
-silent search failures remain intact.
+Keep search input/results local to Search. Leaving Search clears its interaction
+state and touch selection and cancels pending search work; returning starts with
+the initial search screen. Do not lift search state above route unmounts or retain
+its screen instance to preserve results. If the router retains routes, explicitly
+reset Search on leaving. The shared following state and pending follow mutations
+still survive navigation. Existing query validation, cancellation of superseded
+searches, response ordering, and silent search failures remain intact.
 
 ## Observability and verification
 
@@ -369,10 +394,13 @@ Verification must cover:
   existing-follow success at the cap, transaction rollback, and no catalog calls or
   people writes. Test with fake ports independently of frameworks and databases.
 - Disposable PostgreSQL: migration upgrade/downgrade, FK and uniqueness constraints,
-  stable first-follow ordering, same-person concurrent requests, and distinct-person
-  concurrent requests starting from two follows. Exactly one new distinct follow
+  newest-first ordering with deterministic ties, same-person concurrent requests,
+  and distinct-person concurrent requests starting from two follows. Exactly one new distinct follow
   can succeed from two, regardless of request timing. A failed transaction leaves
-  count unchanged; a committed follow survives a new session/process.
+  count unchanged; a committed follow survives a new session/process. Verify a
+  repeated follow preserves its timestamp and ordering. Hold a follow operation
+  waiting on a real database lock and verify another async task/request progresses
+  on the event loop, using separate sessions/connections.
 - API/contract: exact request shape, safe integer bounds, extra field rejection,
   cookie ownership, cross-origin rejection, empty `500` and no-store headers,
   successful empty list, current summary mapping, and commit-before-success.
@@ -380,12 +408,16 @@ Verification must cover:
   the existing empty body and cookie behavior.
 - Client: optimism, rollback, duplicate identities, hidden actions at three including
   pending slots, initial unknown state, sequential queued mutations, response/read
-  races, ambiguous commit reconciliation, navigation during saves, and search
-  state preservation. Failed refresh must not erase confirmed follows.
+  races, lost-response rollback and successful manual retry, navigation during
+  saves, and search state reset. Verify a failed mutation triggers no list request,
+  including cap rejection and lost responses after commit. Failed ordinary
+  refreshes must not erase confirmed follows.
   Prove new-guest events clear old state, discard unsent old-guest mutations, and
   ignore old in-flight responses, while ordinary readiness invalidation and
   returning-guest bootstrap preserve confirmed follows.
-- Browser: persistent sidebar and empty Following; follow and reload; search status
+- Browser: persistent sidebar and blank Following during initial loading, empty
+  success, and initial load failure, without an activity indicator; newest-first
+  Following; search reset after navigation; follow and reload; search status
   overlay over browser-cached results; mouse hover into the button; keyboard focus
   and activation; touch first-tap reveal, second-tap activation, switching rows,
   outside dismissal, and scrolling without activation. Verify touch dismissal is
@@ -405,12 +437,13 @@ for the F002 delivery contract.
 
 Choose module/class names, port granularity, SQL query factoring, shared-state
 mechanism, and input-event handling within the contracts above. Choose exact
-sidebar dimensions, responsive spacing, and loading-indicator styling consistent
-with the existing app and wireframes. Keep these as local decisions rather than
-introducing a generic state framework, scheduler, or future feature scaffolding.
+sidebar dimensions and responsive spacing consistent with the existing app and
+wireframes. Keep these as local decisions rather than introducing a generic state
+framework, scheduler, or future feature scaffolding.
 
 Changes to request identity fields, missing-person behavior, optimistic rollback,
-guest cap, persistence guarantees, touch interaction, or deferred scope require an
-explicit design revision. The author's proposed ordering, endpoint/response shape,
-error conventions, loading behavior, and synchronization defaults are subject to
-the owner's review of this draft.
+guest cap, persistence guarantees, newest-first ordering, blank initial loading,
+manual retry, asynchronous database I/O, table name, touch interaction, search
+state reset, or deferred scope require an explicit design revision. The author's
+proposed endpoint/response shape, tie breaker, error conventions, and remaining
+synchronization defaults are subject to the owner's review of this draft.
