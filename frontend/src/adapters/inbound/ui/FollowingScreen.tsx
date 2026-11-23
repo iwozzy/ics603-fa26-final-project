@@ -8,7 +8,7 @@ export default function FollowingScreen() {
   const { state, refresh, unfollow } = useFollowing();
   useFocusEffect(useCallback(() => { void refresh(); }, [refresh]));
   return <ScrollView contentContainerStyle={styles.page}><View style={styles.list}>
-    <PersonActionList people={state.people} resultSetKey={state.confirmed ? 'following' : 'unknown'} actionFor={() => 'unfollow'}
+    <PersonActionList selectionMode="membership" people={state.people} resultSetKey={state.confirmed ? 'following' : 'unknown'} actionFor={() => 'unfollow'}
       onActivate={unfollow} rowIdFor={personKey} testIdFor={person => 'following-person-' + personKey(person)} />
   </View></ScrollView>;
 }

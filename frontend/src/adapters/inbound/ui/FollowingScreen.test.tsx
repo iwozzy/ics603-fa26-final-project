@@ -99,3 +99,34 @@ test('unfollow touch selection switches and cancelled or moved gestures never re
   for (const button of screen.getAllByRole('button')) expect(button).toHaveStyle({ opacity: 0 });
   await h.unmount(); h.store.stop();
 });
+
+test('following refresh preserves touch selection while the same person remains', async () => {
+  const h = await loaded(2, 1);
+  const name = screen.getByText('Person 2');
+  const button = within(screen.getByTestId('following-person-tmdb:2')).getByRole('button');
+  await fireEvent(name, 'pointerDown', pointer()); await fireEvent(name, 'pointerUp', pointer());
+  expect(button).toHaveStyle({ opacity: 1 });
+  let refresh!: Promise<void>;
+  await act(() => { refresh = h.store.refresh(); });
+  expect(button).toHaveStyle({ opacity: 1 });
+  await act(async () => { h.fake.listCalls.at(-1)!.resolve(snapshot(2, 1)); await refresh; });
+  expect(button).toHaveStyle({ opacity: 1 });
+  await fireEvent(button, 'pointerDown', pointer()); await fireEvent(button, 'pointerUp', pointer()); await fireEvent.press(button);
+  await act(flush); expect(h.fake.unfollowCalls).toHaveLength(1);
+  await h.unmount(); h.store.stop();
+});
+
+test('pen first tap reveals, cancelled gestures do nothing, and second tap removes once', async () => {
+  const h = await loaded(2, 1);
+  const name = screen.getByText('Person 2');
+  const button = within(screen.getByTestId('following-person-tmdb:2')).getByRole('button');
+  await fireEvent(name, 'pointerDown', pointer('pen')); await fireEvent(name, 'pointerUp', pointer('pen'));
+  expect(button).toHaveStyle({ opacity: 1 });
+  await fireEvent(button, 'pointerDown', pointer('pen')); await fireEvent(button, 'pointerCancel', pointer('pen')); await fireEvent.press(button);
+  await act(flush); expect(h.fake.unfollowCalls).toHaveLength(0);
+  await fireEvent(button, 'pointerDown', pointer('pen')); await fireEvent(button, 'pointerMove', pointer('pen', 30)); await fireEvent(button, 'pointerUp', pointer('pen', 30)); await fireEvent.press(button);
+  await act(flush); expect(h.fake.unfollowCalls).toHaveLength(0);
+  await fireEvent(button, 'pointerDown', pointer('pen')); await fireEvent(button, 'pointerUp', pointer('pen')); await fireEvent.press(button);
+  await act(flush); expect(h.fake.unfollowCalls).toHaveLength(1);
+  await h.unmount(); h.store.stop();
+});

@@ -181,3 +181,43 @@ test('unfollow real touch reveals, switches, dismisses, cancels and navigates wi
     await nav(page, 'Following').tap(); await expect(other.getByRole('button')).toHaveCSS('opacity', '0');
   } finally { await context.close(); }
 });
+
+test('unfollow touch selection survives an ordinary identical refresh', async ({ browser }) => {
+  const context = await browser.newContext({ baseURL: 'http://127.0.0.1:18080', hasTouch: true, viewport: { width: 375, height: 700 } });
+  const page = await context.newPage();
+  let release!: () => void, entered!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  const waiting = new Promise<void>(resolve => { entered = resolve; });
+  try {
+    await seed(page, 2); await nav(page, 'Search').tap();
+    await page.route('**/api/v1/following', async route => {
+      if (route.request().method() !== 'GET') return route.continue();
+      entered(); await gate; await route.continue();
+    });
+    await nav(page, 'Following').tap(); await waiting;
+    const row = followingRow(page, 'Tom Holland'), action = row.getByRole('button');
+    await row.getByText('Tom Holland', { exact: true }).tap(); await expect(action).toHaveCSS('opacity', '1');
+    const refreshed = page.waitForResponse(r => r.url().endsWith('/following') && r.request().method() === 'GET');
+    release(); expect((await refreshed).status()).toBe(200);
+    await expect(action).toHaveCSS('opacity', '1');
+    const completed = deletes(page); await action.tap(); expect((await completed).status()).toBe(204);
+    await expect(row).toHaveCount(0);
+  } finally { release?.(); await context.close(); }
+});
+
+test('unfollow pen taps reveal and submit once, and outside pen dismisses', async ({ page }) => {
+  await seed(page, 2);
+  let removals = 0;
+  page.on('request', r => { if (r.url().endsWith('/following') && r.method() === 'DELETE') removals++; });
+  const row = followingRow(page, 'Tom Holland'), name = row.getByText('Tom Holland', { exact: true }), action = row.getByRole('button');
+  const pen = { pointerType: 'pen', pointerId: 1, clientX: 20, clientY: 20, isPrimary: true, button: 0, buttons: 1 };
+  await name.dispatchEvent('pointerdown', pen); await name.dispatchEvent('pointerup', { ...pen, buttons: 0 });
+  await expect(action).toHaveCSS('opacity', '1'); expect(removals).toBe(0);
+  await page.getByText('Lumière', { exact: true }).dispatchEvent('pointerdown', pen);
+  await expect(action).toHaveCSS('opacity', '0');
+  await name.dispatchEvent('pointerdown', pen); await name.dispatchEvent('pointerup', { ...pen, buttons: 0 });
+  await expect(action).toHaveCSS('opacity', '1');
+  const completed = deletes(page);
+  await action.dispatchEvent('pointerdown', pen); await action.dispatchEvent('pointerup', { ...pen, buttons: 0 }); await action.dispatchEvent('click');
+  expect((await completed).status()).toBe(204); await expect(row).toHaveCount(0); expect(removals).toBe(1);
+});

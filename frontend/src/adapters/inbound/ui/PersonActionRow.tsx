@@ -26,7 +26,7 @@ export function PersonActionRow({ person, rowId, action: kind, touchSelected, on
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const touch = (event: PointerEvent) => {
-      if (event.pointerType === 'touch') { modality.current = 'touch'; setHovered(false); setFocused(false); }
+      if (event.pointerType === 'touch' || event.pointerType === 'pen') { modality.current = 'touch'; setHovered(false); setFocused(false); }
     };
     const keyboard = () => { modality.current = 'keyboard'; };
     document.addEventListener('pointerdown', touch, true); document.addEventListener('keydown', keyboard, true);
@@ -45,9 +45,9 @@ export function PersonActionRow({ person, rowId, action: kind, touchSelected, on
   const content = <PersonRow person={person} action={action} />;
   if (Platform.OS !== 'web') return <Pressable onPress={() => onTouchSelect(rowId)}>{content}</Pressable>;
   const down = (event: ReactPointerEvent<HTMLDivElement>) => {
-    modality.current = event.pointerType === 'touch' ? 'touch' : 'mouse';
+    modality.current = (event.pointerType === 'touch' || event.pointerType === 'pen') ? 'touch' : 'mouse';
     setFocused(false);
-    if (event.pointerType === 'touch') {
+    if (event.pointerType === 'touch' || event.pointerType === 'pen') {
       setHovered(false);
       gesture.current = { x: event.clientX, y: event.clientY, id: event.pointerId, moved: false };
       touchActivation.current = touchSelected;
@@ -63,7 +63,7 @@ export function PersonActionRow({ person, rowId, action: kind, touchSelected, on
     onPointerCancel={() => { gesture.current = null; touchActivation.current = false; }}
     onPointerUp={event => {
       const current = gesture.current; gesture.current = null;
-      if (event.pointerType === 'touch' && current && current.id === event.pointerId && !current.moved) onTouchSelect(rowId);
+      if ((event.pointerType === 'touch' || event.pointerType === 'pen') && current && current.id === event.pointerId && !current.moved) onTouchSelect(rowId);
     }}>{content}</div>;
 }
 const styles = StyleSheet.create({

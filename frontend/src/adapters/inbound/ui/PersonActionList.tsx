@@ -5,6 +5,7 @@ import type { PersonSummary } from '../../../domain/people';
 import { PersonActionRow, type PersonAction } from './PersonActionRow';
 
 interface Props {
+  selectionMode?: 'results' | 'membership';
   people: readonly PersonSummary[];
   resultSetKey: string;
   actionFor(person: PersonSummary): PersonAction;
@@ -12,9 +13,11 @@ interface Props {
   rowIdFor(person: PersonSummary, position: number): string;
   testIdFor(person: PersonSummary, position: number): string;
 }
-export function PersonActionList({ people, resultSetKey, actionFor, onActivate, rowIdFor, testIdFor }: Props) {
+export function PersonActionList({ selectionMode = 'results', people, resultSetKey, actionFor, onActivate, rowIdFor, testIdFor }: Props) {
   const [selection, setSelection] = useState<{ people: readonly PersonSummary[]; key: string; rowId: string } | null>(null);
-  const selected = selection?.people === people && selection.key === resultSetKey ? selection.rowId : null;
+  const selectionMatches = selection?.key === resultSetKey && (selectionMode === 'membership' || selection.people === people);
+  const selected = selectionMatches && people.some((person, position) => rowIdFor(person, position) === selection.rowId) ? selection.rowId : null;
+  if (selection && selected === null) setSelection(null);
   const root = useRef<ComponentRef<typeof View>>(null);
   const restoration = useRef<{ rowId: string; key: string; fallback: HTMLElement } | null>(null);
   const keyboard = useRef(true);
@@ -24,7 +27,7 @@ export function PersonActionList({ people, resultSetKey, actionFor, onActivate, 
     const pointer = (event: PointerEvent) => {
       keyboard.current = false;
       restoration.current = null;
-      if (event.pointerType !== 'touch') return;
+      if (event.pointerType !== 'touch' && event.pointerType !== 'pen') return;
       const container = root.current as unknown as HTMLElement | null;
       const target = event.target;
       if (!(target instanceof Element) || !container?.contains(target) || target.closest('[data-person-row]')?.getAttribute('data-person-row') !== selected) setSelection(null);
