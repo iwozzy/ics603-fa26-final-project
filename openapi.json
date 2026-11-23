@@ -8,6 +8,49 @@
         "title": "CatalogProvider",
         "type": "string"
       },
+      "FollowPersonRequest": {
+        "additionalProperties": false,
+        "properties": {
+          "provider": {
+            "$ref": "#/components/schemas/CatalogProvider"
+          },
+          "provider_id": {
+            "exclusiveMinimum": 0.0,
+            "maximum": 9007199254740991.0,
+            "title": "Provider Id",
+            "type": "integer"
+          }
+        },
+        "required": [
+          "provider",
+          "provider_id"
+        ],
+        "title": "FollowPersonRequest",
+        "type": "object"
+      },
+      "FollowingResponse": {
+        "properties": {
+          "limit": {
+            "const": 3,
+            "title": "Limit",
+            "type": "integer"
+          },
+          "people": {
+            "items": {
+              "$ref": "#/components/schemas/PersonResponse"
+            },
+            "maxItems": 3,
+            "title": "People",
+            "type": "array"
+          }
+        },
+        "required": [
+          "people",
+          "limit"
+        ],
+        "title": "FollowingResponse",
+        "type": "object"
+      },
       "HTTPValidationError": {
         "properties": {
           "detail": {
@@ -154,12 +197,74 @@
   },
   "openapi": "3.1.0",
   "paths": {
+    "/api/v1/following": {
+      "get": {
+        "operationId": "listFollowing",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "description": "Following failed"
+          }
+        },
+        "summary": "List Following"
+      },
+      "post": {
+        "operationId": "followPerson",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/FollowPersonRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/FollowingResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "description": "Following failed"
+          }
+        },
+        "summary": "Follow Person"
+      }
+    },
     "/api/v1/guest-session": {
       "post": {
         "operationId": "bootstrapGuestSession",
         "responses": {
           "200": {
-            "description": "Successful Response"
+            "description": "Successful Response",
+            "headers": {
+              "X-Lumiere-Guest-Created": {
+                "description": "Whether bootstrap created a guest profile",
+                "schema": {
+                  "enum": [
+                    "true",
+                    "false"
+                  ],
+                  "type": "string"
+                }
+              }
+            }
           },
           "500": {
             "description": "Bootstrap failed"

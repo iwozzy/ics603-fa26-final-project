@@ -6,11 +6,13 @@ import pytest
 from asgi_lifespan import LifespanManager
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.application.use_cases.following import FollowPerson, ListFollowing
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.domain.access import UsagePolicy
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
+from tests.fakes.following import MemoryFollowing
 from tests.fakes.search import (
     FakeAdmission,
     FakeCatalog,
@@ -26,14 +28,18 @@ class Api:
     catalog: FakeCatalog
     admission: FakeAdmission
     services: HttpServices
+    following: MemoryFollowing
+    access: MemoryAccess
 
 
 @pytest.fixture
 async def api() -> AsyncIterator[Api]:
     catalog = FakeCatalog((sample_person(known_for=("Alien",)),))
     admission = FakeAdmission()
-    sessions = GuestIdentityService(MemoryAccess(), UsagePolicy(100,100,100,100,100,100,100,100,100,100))
-    services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), sessions, b"synthetic-test-key")
+    access = MemoryAccess()
+    following = MemoryFollowing()
+    sessions = GuestIdentityService(access, UsagePolicy(100,100,100,100,100,100,100,100,100,100))
+    services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), sessions, b"synthetic-test-key", list_following=ListFollowing(following), follow_person=FollowPerson(following))
     app = create_app(services)
     async with LifespanManager(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="https://app.test") as client:
-        yield Api(client, catalog, admission, services)
+        yield Api(client, catalog, admission, services, following, access)

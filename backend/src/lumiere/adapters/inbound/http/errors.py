@@ -5,7 +5,7 @@ from fastapi.exception_handlers import request_validation_exception_handler
 from fastapi.exceptions import RequestValidationError
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from lumiere.domain.errors import SearchFailed
+from lumiere.domain.errors import FollowingFailed, SearchFailed
 
 
 def failure_response() -> Response:
@@ -13,13 +13,13 @@ def failure_response() -> Response:
 
 
 async def validation_failure(request: Request, exc: RequestValidationError) -> Response:
-    if request.url.path == "/api/v1/people/search":
+    if request.url.path in {"/api/v1/people/search", "/api/v1/following"}:
         return failure_response()
     return await request_validation_exception_handler(request, exc)
 
 
 def _failure_category(error: Exception) -> str:
-    if isinstance(error, SearchFailed):
+    if isinstance(error, (SearchFailed, FollowingFailed)):
         return error.category
     return "deadline" if isinstance(error, TimeoutError) else "internal"
 

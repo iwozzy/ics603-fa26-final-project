@@ -8,6 +8,7 @@ import pytest
 from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.adapters.outbound.persistence.pools import PoolRegistry
 from lumiere.application.people_writer import PeopleWriter
+from lumiere.application.use_cases.following import FollowPerson, ListFollowing
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
@@ -16,6 +17,7 @@ from lumiere.domain.access import CounterKey, GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from tests.fakes.access import MemoryUow
 from tests.fakes.accounting import ControlledAccess
+from tests.fakes.following import MemoryFollowing
 from tests.fakes.people import ControlledPeoplePersistence
 from tests.fakes.search import FakeCatalog, FakeClock, FakePeopleQueue
 
@@ -36,7 +38,7 @@ class EngineProbe:
 
 
 def make_container(access: ControlledAccess, admission: UsageAdmissionService, probe: EngineProbe) -> AppContainer:
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(access, POLICY), b"synthetic-test-key")
+    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(access, POLICY), b"synthetic-test-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()))
     return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, probe), admission, PeopleWriter(ControlledPeoplePersistence()))
 
 

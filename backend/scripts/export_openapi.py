@@ -4,13 +4,14 @@ from pathlib import Path
 from typing import cast
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.application.ports.following import FollowPersonPort, ListFollowingPort
 from lumiere.application.ports.guests import GuestIdentities
 from lumiere.application.ports.search import PeopleSearch
 from lumiere.main import create_app
 
 
 def export() -> None:
-    services = HttpServices(cast(PeopleSearch, None), cast(GuestIdentities, None), b"")
+    services = HttpServices(cast(PeopleSearch, None), cast(GuestIdentities, None), b"", list_following=cast(ListFollowingPort, None), follow_person=cast(FollowPersonPort, None))
     document = create_app(services).openapi()
     path = Path(__file__).resolve().parents[2] / "openapi.json"
     path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")

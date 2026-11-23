@@ -13,6 +13,8 @@ async def test_session_cookie_and_reuse(api: Api, scheme: str) -> None:
         response = await client.post("/api/v1/guest-session")
         assert response.status_code == 200 and response.content == b""
         assert response.headers["cache-control"] == "no-store"
+        assert response.headers["x-lumiere-guest-created"] == "true"
+        assert (await client.post("/api/v1/guest-session")).headers["x-lumiere-guest-created"] == "false"
         cookie = response.headers["set-cookie"].lower()
         assert "httponly" in cookie and "samesite=lax" in cookie and "path=/" in cookie
         assert ("secure" in cookie) == (scheme == "https")

@@ -10,6 +10,31 @@ export type ClientOptions = {
 export type CatalogProvider = 'tmdb';
 
 /**
+ * FollowPersonRequest
+ */
+export type FollowPersonRequest = {
+    provider: CatalogProvider;
+    /**
+     * Provider Id
+     */
+    provider_id: number;
+};
+
+/**
+ * FollowingResponse
+ */
+export type FollowingResponse = {
+    /**
+     * Limit
+     */
+    limit: 3;
+    /**
+     * People
+     */
+    people: Array<PersonResponse>;
+};
+
+/**
  * HTTPValidationError
  */
 export type HttpValidationError = {
@@ -87,6 +112,52 @@ export type ValidationError = {
      */
     type: string;
 };
+
+export type ListFollowingData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/api/v1/following';
+};
+
+export type ListFollowingErrors = {
+    /**
+     * Following failed
+     */
+    500: unknown;
+};
+
+export type ListFollowingResponses = {
+    /**
+     * Successful Response
+     */
+    200: FollowingResponse;
+};
+
+export type ListFollowingResponse = ListFollowingResponses[keyof ListFollowingResponses];
+
+export type FollowPersonData = {
+    body: FollowPersonRequest;
+    path?: never;
+    query?: never;
+    url: '/api/v1/following';
+};
+
+export type FollowPersonErrors = {
+    /**
+     * Following failed
+     */
+    500: unknown;
+};
+
+export type FollowPersonResponses = {
+    /**
+     * Successful Response
+     */
+    200: FollowingResponse;
+};
+
+export type FollowPersonResponse = FollowPersonResponses[keyof FollowPersonResponses];
 
 export type BootstrapGuestSessionData = {
     body?: never;

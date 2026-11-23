@@ -8,12 +8,14 @@ from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanE
 
 from lumiere.adapters.inbound.http.deps import HttpServices
 from lumiere.adapters.outbound.clients.tmdb_people.client import TMDBPeopleCatalog
+from lumiere.application.use_cases.following import FollowPerson, ListFollowing
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.domain.access import UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
+from tests.fakes.following import MemoryFollowing
 from tests.fakes.search import FakeAdmission, FakeClock, FakePeopleQueue
 
 
@@ -28,7 +30,7 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     async with httpx.AsyncClient(base_url="https://provider.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "SENTINEL_PAYLOAD"}, {"id": False, "name": "invalid"}]}))) as provider:
         catalog = TMDBPeopleCatalog(provider, report=telemetry.record_catalog_counts)
         policy = UsagePolicy(100,100,100,100,100,100,100,100,100,100)
-        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key")
+        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()))
         app = create_app(telemetry.observe_services(services))
         telemetry.instrument_http(app)
         async with httpx.AsyncClient(base_url="https://app.test", transport=httpx.ASGITransport(app=app)) as client:
@@ -111,3 +113,39 @@ def test_people_events_are_sanitized_and_reporter_outage_is_contained(monkeypatc
     telemetry.record_people_write(PeopleWriteEvent('failed', 0, 0))
     assert 'SENTINEL' not in json.dumps(attributes)
     telemetry.configure_observability(False)
+
+
+@pytest.mark.parametrize('category', ['missing_person', 'follow_limit', 'invalid_identity', 'session', 'storage', 'deadline'])
+async def test_follow_spans_sanitize_identity_and_errors(monkeypatch: pytest.MonkeyPatch, category: str) -> None:
+    from uuid import uuid4
+
+    import lumiere.observability as telemetry
+    from lumiere.domain.access import GuestContext
+    from lumiere.domain.errors import FollowingFailed
+    from lumiere.domain.following import FollowingSnapshot, PersonIdentity
+    from lumiere.domain.people import CatalogProvider
+    from tests.fakes.search import sample_person
+
+    exporter = InMemorySpanExporter()
+    logfire.configure(send_to_logfire=False, console=False, inspect_arguments=False, additional_span_processors=[SimpleSpanProcessor(exporter)])
+    monkeypatch.setattr(telemetry, '_configure_export', lambda: True)
+    telemetry.configure_observability(True)
+    class Follow:
+        async def execute(self, identity: PersonIdentity, context: GuestContext) -> FollowingSnapshot:
+            raise FollowingFailed(category)
+    class List:
+        async def execute(self, context: GuestContext) -> FollowingSnapshot:
+            return FollowingSnapshot((sample_person(4139, name='SENTINEL_PERSON'),), 3)
+    try:
+        context = GuestContext(uuid4(), 'SENTINEL_IP')
+        with pytest.raises(FollowingFailed):
+            await telemetry.ObservedFollowPerson(Follow()).execute(PersonIdentity(CatalogProvider.TMDB, 4139), context)
+        await telemetry.ObservedListFollowing(List()).execute(context)
+        spans = exporter.get_finished_spans()
+        assert {s.name for s in spans} >= {'following.list', 'following.follow'}
+        attributes = [dict(s.attributes or {}) for s in spans]
+        assert any(a.get('failure_category') == category for a in attributes)
+        encoded = json.dumps(attributes)
+        assert 'SENTINEL' not in encoded and '4139' not in encoded and str(context.profile_id) not in encoded
+    finally:
+        telemetry.configure_observability(False)

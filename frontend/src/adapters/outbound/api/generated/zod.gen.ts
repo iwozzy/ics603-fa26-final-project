@@ -8,6 +8,14 @@ import * as z from 'zod';
 export const zCatalogProvider = z.enum(['tmdb']);
 
 /**
+ * FollowPersonRequest
+ */
+export const zFollowPersonRequest = z.object({
+    provider: zCatalogProvider,
+    provider_id: z.int().gt(0).lte(9007199254740991)
+});
+
+/**
  * PersonResponse
  */
 export const zPersonResponse = z.object({
@@ -17,6 +25,14 @@ export const zPersonResponse = z.object({
     profile_image_url: z.string().nullable(),
     provider: zCatalogProvider,
     provider_id: z.int().gt(0).lte(9007199254740991)
+});
+
+/**
+ * FollowingResponse
+ */
+export const zFollowingResponse = z.object({
+    limit: z.literal(3),
+    people: z.array(zPersonResponse).max(3)
 });
 
 /**

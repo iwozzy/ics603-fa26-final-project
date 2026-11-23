@@ -17,15 +17,17 @@ from sqlalchemy.engine import ExceptionContext, ExecutionContext
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.application.ports.following import FollowPersonPort, ListFollowingPort
 from lumiere.application.ports.people import PeopleWriteEvent
 from lumiere.application.ports.search import PeopleSearch
 from lumiere.domain.access import GuestContext
-from lumiere.domain.errors import SearchFailed
+from lumiere.domain.errors import FollowingFailed, SearchFailed
+from lumiere.domain.following import FollowingSnapshot, PersonIdentity
 from lumiere.domain.people import SearchPeopleResult
 
 _enabled = False
 _ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text", "event_kind", "outstanding", "in_flight", "attempt", "duration_ms"}
-_CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled"}
+_CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled", "missing_person", "follow_limit", "invalid_identity", "origin"}
 
 
 def _configure_export() -> bool:
@@ -93,7 +95,7 @@ class ObservedSearch:
 
 
 def observe_services(services: HttpServices) -> HttpServices:
-    return replace(services, search_people=ObservedSearch(services.search_people))
+    return replace(services, search_people=ObservedSearch(services.search_people), list_following=ObservedListFollowing(services.list_following), follow_person=ObservedFollowPerson(services.follow_person))
 
 
 class HttpTelemetry:
@@ -105,6 +107,8 @@ class HttpTelemetry:
             await self.app(scope, receive, send)
             return
         name = {"/api/v1/people/search": "http.search", "/api/v1/guest-session": "http.bootstrap"}.get(scope["path"], "http.other")
+        if scope["path"] == "/api/v1/following":
+            name = "http.following.list" if scope["method"] == "GET" else "http.following.follow"
         with safe_span(name) as attributes:
             attributes["correlation_id"] = str(uuid4())
 
@@ -170,3 +174,35 @@ def instrument_database(engine: Engine) -> None:
 def record_people_write(event: PeopleWriteEvent) -> None:
     with safe_span("people.persistence") as attributes:
         attributes.update(event_kind=event.kind, outstanding=event.outstanding, in_flight=event.in_flight, attempt=event.attempt, duration_ms=event.duration_ms)
+
+
+class ObservedListFollowing:
+    def __init__(self, inner: ListFollowingPort) -> None:
+        self.inner = inner
+
+    async def execute(self, context: GuestContext) -> FollowingSnapshot:
+        with safe_span('following.list') as attributes:
+            try:
+                return await self.inner.execute(context)
+            except (FollowingFailed, SearchFailed) as error:
+                attributes['failure_category'] = error.category if error.category in _CATEGORIES else 'internal'
+                raise
+            except TimeoutError:
+                attributes['failure_category'] = 'deadline'
+                raise
+
+
+class ObservedFollowPerson:
+    def __init__(self, inner: FollowPersonPort) -> None:
+        self.inner = inner
+
+    async def execute(self, identity: PersonIdentity, context: GuestContext) -> FollowingSnapshot:
+        with safe_span('following.follow') as attributes:
+            try:
+                return await self.inner.execute(identity, context)
+            except (FollowingFailed, SearchFailed) as error:
+                attributes['failure_category'] = error.category if error.category in _CATEGORIES else 'internal'
+                raise
+            except TimeoutError:
+                attributes['failure_category'] = 'deadline'
+                raise
