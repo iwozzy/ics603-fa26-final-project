@@ -19,18 +19,25 @@ export class FollowingStore {
   private active = false;
   private epoch = 0;
   private revision = 0;
+  private identityGeneration: number;
   private unsubscribeIdentity?: () => void;
-  private reading?: { controller: AbortController; promise: Promise<void> };
+  private reading?: { controller: AbortController; promise: Promise<void>; revision: number };
   private sending?: { controller: AbortController; epoch: number };
   private queue: PersonSummary[] = [];
-  constructor(private readonly list: ListFollowing, private readonly follow: FollowPerson, private readonly sessions: GuestSessionRepository) {}
+  constructor(private readonly list: ListFollowing, private readonly follow: FollowPerson, private readonly sessions: GuestSessionRepository) { this.identityGeneration = sessions.identityGeneration; }
   getSnapshot = (): FollowingViewState => this.state;
   subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
 
   start(): void {
     if (this.active) return;
+    if (this.identityGeneration !== this.sessions.identityGeneration) {
+      this.identityGeneration = this.sessions.identityGeneration;
+      this.abandon();
+      this.publish(null, [], 'idle');
+    }
     this.active = true;
-    this.unsubscribeIdentity = this.sessions.subscribeIdentityCreated(() => {
+    this.unsubscribeIdentity = this.sessions.subscribeIdentityCreated(generation => {
+      this.identityGeneration = generation;
       this.abandon();
       this.publish(null, [], 'idle');
       void this.refresh();
@@ -52,7 +59,9 @@ export class FollowingStore {
   }
   refresh = (): Promise<void> => {
     if (!this.active) return Promise.resolve();
-    if (this.reading) return this.reading.promise;
+    if (this.reading?.revision === this.revision) return this.reading.promise;
+    this.reading?.controller.abort();
+    this.reading = undefined;
     const epoch = this.epoch, revision = this.revision;
     const generation = this.sessions.identityGeneration;
     const controller = new AbortController();
@@ -69,7 +78,7 @@ export class FollowingStore {
         if (current() && this.state.phase === 'loading') this.publish(this.state.confirmed, this.state.pending, this.state.confirmed ? 'ready' : 'failed');
       }
     });
-    this.reading = { controller, promise };
+    this.reading = { controller, promise, revision };
     return promise;
   };
   requestFollow = (person: PersonSummary): boolean => {

@@ -116,7 +116,8 @@ def test_following_openapi_matches_silent_contract(api: Api) -> None:
     assert document['components']['schemas']['FollowPersonRequest']['additionalProperties'] is False
 
 
-async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize('undecodable', [False, True])
+async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pytest.MonkeyPatch, undecodable: bool) -> None:
     from collections.abc import Iterator
     from contextlib import contextmanager
 
@@ -131,6 +132,10 @@ async def test_validation_has_sanitized_http_category(api: Api, monkeypatch: pyt
     app = create_app(api.services)
     observability.instrument_http(app)
     async with httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url='https://app.test') as client:
-        assert_failure(await client.post('/api/v1/following', json={'provider': 'SENTINEL_INVALID', 'provider_id': True}))
+        if undecodable:
+            response = await client.post('/api/v1/following', content=b'\xff \xff', headers={'content-type': 'application/json'})
+        else:
+            response = await client.post('/api/v1/following', json={'provider': 'SENTINEL_INVALID', 'provider_id': True})
+        assert_failure(response)
     assert any(name == 'http.following.follow' and attributes.get('failure_category') == 'invalid_identity' for name, attributes in spans)
     assert 'SENTINEL' not in str(spans)

@@ -8,7 +8,14 @@ import { withDeadline } from './transport';
 
 export class HttpFollowingRepository implements FollowingRepository {
   constructor(private readonly fetchImpl: typeof fetch, private readonly sessions: GuestSessionRepository) {}
-  list(signal: AbortSignal): Promise<FollowingSnapshot> { return this.request(signal, { method: 'GET', cache: 'no-store' }); }
+  async list(signal: AbortSignal): Promise<FollowingSnapshot> {
+    try { return await this.request(signal, { method: 'GET', cache: 'no-store' }); }
+    catch {
+      // The next ordinary read can bootstrap a missing cookie; this read does not retry.
+      if (!signal.aborted) this.sessions.invalidate();
+      throw new FollowingFailed();
+    }
+  }
   async follow(identity: PersonIdentity, signal: AbortSignal): Promise<FollowingSnapshot> {
     try {
       const body = zFollowPersonRequest.parse({ provider: identity.provider, provider_id: identity.providerId });

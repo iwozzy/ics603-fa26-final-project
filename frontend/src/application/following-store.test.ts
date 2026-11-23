@@ -144,3 +144,29 @@ test('deduplicated reads and start stop start ignore abandoned work', async () =
   fake.listCalls[1].resolve(snapshot(1)); await flushPromises();
   expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([1]); store.stop();
 });
+
+test('restart after a missed guest creation clears old follows before allowing actions', async () => {
+  const { store, fake, sessions } = await ready(1);
+  store.stop(); sessions.createGuest(); store.start();
+  expect(store.getSnapshot()).toMatchObject({ confirmed: null, people: [], pending: [], canFollow: false, phase: 'loading' });
+  expect(store.requestFollow(person(2))).toBe(false);
+  await flushPromises(); expect(fake.followCalls).toHaveLength(0);
+  fake.listCalls[1].resolve(snapshot()); await flushPromises();
+  expect(store.getSnapshot().canFollow).toBe(true);
+  store.stop();
+});
+
+test('ordinary refresh supersedes a read made obsolete by a failed mutation without failure-triggered GET', async () => {
+  const { store, fake } = await ready(1, 2);
+  const obsolete = store.refresh();
+  store.requestFollow(person(3)); await flushPromises();
+  fake.followCalls[0].reject(new Error('lost response after commit')); await flushPromises();
+  expect(fake.listCalls).toHaveLength(2);
+  const navigation = store.refresh();
+  expect(fake.listCalls).toHaveLength(3);
+  expect(fake.listCalls[1].signal.aborted).toBe(true);
+  fake.listCalls[2].resolve(snapshot(3, 2, 1)); await navigation;
+  fake.listCalls[1].resolve(snapshot(1, 2)); await obsolete;
+  expect(store.getSnapshot().people.map(p => p.providerId)).toEqual([3, 2, 1]);
+  store.stop();
+});

@@ -165,3 +165,36 @@ test('follow people touch reveals first, switches, dismisses and scrolls without
     await expect(page).toHaveURL(/\/following$/); await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
   } finally { await context.close(); }
 });
+
+for (const moveAway of [false, true]) test(`following keyboard rollback preserves real focus and respects user movement ${moveAway}`, async ({ page }) => {
+  await page.goto('/'); await search(page); await save(page, 0);
+  let release!: () => void;
+  const gate = new Promise<void>(resolve => { release = resolve; });
+  let rejected = false;
+  await page.route('**/api/v1/following', async route => {
+    if (route.request().method() !== 'POST' || rejected) return route.continue();
+    rejected = true; await gate;
+    await route.fulfill({ status: 500, body: '', headers: { 'Cache-Control': 'no-store' } });
+  });
+  const button = row(page, 1).getByRole('button', { name: 'Follow +' });
+  await page.mouse.move(0, 0); await button.focus();
+  await expect(button).toHaveCSS('opacity', '1');
+  const failed = page.waitForResponse(r => r.url().endsWith('/following') && r.request().method() === 'POST');
+  try {
+    await page.keyboard.press('Enter');
+    await expect(row(page, 1).getByRole('status')).toBeFocused({ timeout: 1000 });
+    if (moveAway) await input(page).focus();
+    release(); expect((await failed).status()).toBe(500);
+    if (moveAway) {
+      await expect(input(page)).toBeFocused();
+      await expect(button).not.toBeFocused();
+      await expect(button).toHaveCSS('opacity', '0');
+    } else {
+      await expect(button).toBeFocused();
+      await expect(button).toHaveCSS('opacity', '1');
+      const retried = page.waitForResponse(r => r.url().endsWith('/following') && r.request().method() === 'POST');
+      await page.keyboard.press('Space'); expect((await retried).status()).toBe(200);
+      await expect(row(page, 1).getByRole('status')).toBeFocused({ timeout: 1000 });
+    }
+  } finally { release(); await failed; }
+});

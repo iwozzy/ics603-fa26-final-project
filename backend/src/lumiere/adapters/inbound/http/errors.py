@@ -1,8 +1,12 @@
 import asyncio
 
 from fastapi import Request, Response
-from fastapi.exception_handlers import request_validation_exception_handler
+from fastapi.exception_handlers import (
+    http_exception_handler,
+    request_validation_exception_handler,
+)
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.domain.errors import FollowingFailed, SearchFailed
@@ -19,6 +23,14 @@ async def validation_failure(request: Request, exc: RequestValidationError) -> R
     if request.url.path == "/api/v1/people/search":
         return failure_response()
     return await request_validation_exception_handler(request, exc)
+
+
+async def http_failure(request: Request, exc: HTTPException) -> Response:
+    # FastAPI raises HTTPException(400) when a JSON body cannot be decoded.
+    if request.url.path == '/api/v1/following' and request.method == 'POST' and exc.status_code == 400:
+        request.state.failure_category = 'invalid_identity'
+        return failure_response()
+    return await http_exception_handler(request, exc)
 
 
 def _failure_category(error: Exception) -> str:

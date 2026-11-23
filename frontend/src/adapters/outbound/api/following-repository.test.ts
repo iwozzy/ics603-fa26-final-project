@@ -57,3 +57,24 @@ test('aborted work cannot dispatch after bootstrap', async () => {
   await expect(request).rejects.toThrow();
   expect(fetcher).toHaveBeenCalledTimes(1);
 });
+
+test('failed ordinary list marks readiness stale so the next list can discover a new guest', async () => {
+  let bootstraps = 0, gets = 0;
+  const fetcher = jest.fn(async (url: RequestInfo | URL, _init?: RequestInit) => {
+    if (url === '/api/v1/guest-session') {
+      bootstraps++;
+      return { ...response(), headers: new Headers({ 'X-Lumiere-Guest-Created': bootstraps > 1 ? 'true' : 'false' }) };
+    }
+    gets++;
+    return gets === 2 ? response({}, false) : response(gets > 2 ? { people: [], limit: 3 } : payload);
+  });
+  const sessions = new HttpGuestSessionRepository(fetcher);
+  const created = jest.fn(); sessions.subscribeIdentityCreated(created);
+  const repository = new HttpFollowingRepository(fetcher, sessions);
+  expect((await repository.list(signal())).people).toHaveLength(1);
+  await expect(repository.list(signal())).rejects.toThrow();
+  expect(bootstraps).toBe(1); expect(created).not.toHaveBeenCalled();
+  expect(await repository.list(signal())).toEqual({ people: [], limit: 3 });
+  expect(bootstraps).toBe(2); expect(created.mock.calls).toEqual([[1]]);
+  expect(gets).toBe(3);
+});

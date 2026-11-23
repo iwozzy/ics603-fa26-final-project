@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState, type ComponentRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import type { PersonSummary } from '../../../domain/people';
 import { PersonRow } from './PersonRow';
@@ -13,6 +13,14 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
   const modality = useRef<'mouse' | 'keyboard' | 'touch'>('keyboard');
   const gesture = useRef<{ x: number; y: number; id: number; moved: boolean } | null>(null);
   const touchActivation = useRef(false);
+  const actionRef = useRef<ComponentRef<typeof Pressable>>(null);
+  useLayoutEffect(() => {
+    if (Platform.OS !== 'web' || typeof document === 'undefined' || modality.current === 'touch') return;
+    // RN web changes the host from button to status div. Removal loses DOM
+    // focus without a blur event; transfer only if focus has fallen to body.
+    const node = actionRef.current as unknown as HTMLElement | null;
+    if (focused && node && document.activeElement === document.body) node.focus();
+  }, [status, focused]);
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof document === 'undefined') return;
     const touch = (event: PointerEvent) => {
@@ -25,8 +33,8 @@ export function SearchPersonRow({ person, rowId, status, touchSelected, onTouchS
   const revealed = hovered || focused || touchSelected;
   const revealStyle = { opacity: revealed ? 1 : 0, pointerEvents: revealed ? 'auto' as const : 'none' as const };
   const action = status === 'hidden' ? null : status === 'following' ?
-    <Pressable role="status" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
-    <Pressable accessibilityRole="button" accessibilityLabel="Follow +" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)}
+    <Pressable ref={actionRef} role="status" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
+    <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel="Follow +" onFocus={() => { if (modality.current !== 'touch') setFocused(true); }} onBlur={() => setFocused(false)}
       onPress={() => {
         if (modality.current === 'touch' && !touchActivation.current) return;
         touchActivation.current = false;

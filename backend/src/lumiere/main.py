@@ -3,9 +3,14 @@ from contextlib import asynccontextmanager
 
 from fastapi import FastAPI, Response
 from fastapi.exceptions import RequestValidationError
+from starlette.exceptions import HTTPException
 
 from lumiere.adapters.inbound.http.deps import HttpServices
-from lumiere.adapters.inbound.http.errors import FailureBoundary, validation_failure
+from lumiere.adapters.inbound.http.errors import (
+    FailureBoundary,
+    http_failure,
+    validation_failure,
+)
 from lumiere.adapters.inbound.http.routers.v1.following import following_router
 from lumiere.adapters.inbound.http.routers.v1.guest_session import session_router
 from lumiere.adapters.inbound.http.routers.v1.people import people_router
@@ -17,6 +22,8 @@ def create_app(services: HttpServices) -> FastAPI:
     app.include_router(following_router(services))
     app.include_router(session_router(services))
     app.add_exception_handler(RequestValidationError, validation_failure)  # type: ignore[arg-type]
+
+    app.add_exception_handler(HTTPException, http_failure)  # type: ignore[arg-type]
 
     app.add_middleware(FailureBoundary)
 
