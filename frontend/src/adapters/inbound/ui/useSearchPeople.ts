@@ -5,7 +5,7 @@ import { PeopleSearchContext } from './PeopleSearchContext';
 export interface SearchState { draft: string; submittedQuery: string; phase: 'initial' | 'loading' | 'results' | 'blank'; people: readonly PersonSummary[]; }
 const initial: SearchState = { draft: '', submittedQuery: '', phase: 'initial', people: [] };
 
-export function useSearchPeople(): SearchState & { setDraft(value: string): void; submit(): Promise<void> } {
+export function useSearchPeople(): SearchState & { setDraft(value: string): void; submit(): Promise<void>; reset(): void } {
   const ports = useContext(PeopleSearchContext);
   if (!ports) throw new Error('PeopleSearchContext is required');
   const { searchPeople } = ports;
@@ -19,14 +19,17 @@ export function useSearchPeople(): SearchState & { setDraft(value: string): void
     return () => { mounted.current = false; generation.current = generation.current + 1; pending.current?.controller.abort(); };
   }, []);
 
+  const reset = useCallback(() => {
+    draft.current = '';
+    generation.current++;
+    pending.current?.controller.abort(); pending.current = undefined;
+    setState(initial);
+  }, []);
   const setDraft = useCallback((value: string) => {
     draft.current = value;
-    if (value === '') {
-      generation.current = generation.current + 1;
-      pending.current?.controller.abort(); pending.current = undefined;
-      setState(initial);
-    } else setState(previous => ({ ...previous, draft: value }));
-  }, []);
+    if (value === '') reset();
+    else setState(previous => ({ ...previous, draft: value }));
+  }, [reset]);
 
   const submit = useCallback(async () => {
     const raw = draft.current;
@@ -48,5 +51,5 @@ export function useSearchPeople(): SearchState & { setDraft(value: string): void
       if (generation.current === current) pending.current = undefined;
     }
   }, [searchPeople]);
-  return { ...state, setDraft, submit };
+  return { ...state, setDraft, submit, reset };
 }

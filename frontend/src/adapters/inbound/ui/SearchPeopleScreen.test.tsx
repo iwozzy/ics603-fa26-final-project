@@ -51,3 +51,5 @@ test('row limits mixed titles and handles missing or broken images without separ
   await fireEvent(screen.getByLabelText('Tom profile'), 'error');
   expect(screen.queryByLabelText('Tom silhouette')).not.toBeNull();
 });
+
+jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void) => { const React = jest.requireActual<typeof import('react')>('react'); React.useEffect(effect, [effect]); } }));
