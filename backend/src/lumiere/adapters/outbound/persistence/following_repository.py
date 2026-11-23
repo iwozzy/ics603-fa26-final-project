@@ -1,6 +1,6 @@
 from uuid import UUID
 
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lumiere.adapters.outbound.clients.tmdb_people.mapper import image_url
@@ -28,6 +28,10 @@ class PostgresFollowingRepository:
 
     async def count(self, profile_id: UUID) -> int:
         return (await self.session.scalar(select(func.count()).select_from(FollowRow).where(FollowRow.profile_id == profile_id))) or 0
+
+    async def remove(self, profile_id: UUID, person_id: int) -> None:
+        await self.session.execute(delete(FollowRow).where(
+            FollowRow.profile_id == profile_id, FollowRow.person_id == person_id))
 
     async def add(self, profile_id: UUID, person_id: int) -> None:
         self.session.add(FollowRow(profile_id=profile_id, person_id=person_id))

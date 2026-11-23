@@ -1,5 +1,6 @@
 import asyncio
 from collections.abc import Callable
+from typing import Self, override
 from uuid import uuid4
 
 import pytest
@@ -16,7 +17,11 @@ from lumiere.adapters.outbound.persistence.models import (
 from lumiere.adapters.outbound.persistence.people_repository import (
     PostgresPeopleRepository,
 )
-from lumiere.application.use_cases.following import FollowPerson, ListFollowing
+from lumiere.application.use_cases.following import (
+    FollowPerson,
+    ListFollowing,
+    UnfollowPerson,
+)
 from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import FollowingFailed
 from lumiere.domain.following import FollowingSnapshot, PersonIdentity
@@ -156,3 +161,131 @@ async def test_rollback_and_cancel_leave_no_membership(following_uows: Factory) 
         assert len((await ListFollowing(lambda: PostgresFollowingUnitOfWork(sessions)).execute(context)).people) == 1
     finally:
         await engine.dispose()
+
+
+async def test_unfollow_survives_fresh_engine(following_uows: Factory) -> None:
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    from tests.integration.persistence.conftest import TEST_DATABASE_URL
+    context = await seed(following_uows)
+    other = await seed(following_uows)
+    for owner, i in ((context, 1), (context, 2), (other, 1)):
+        await FollowPerson(following_uows).execute(identity(i), owner)
+    async with following_uows() as uow:
+        before = {(r.profile_id, r.person_id): r.followed_at for r in await uow.session.scalars(select(FollowRow))}
+        removed = await uow.follows.find_person(identity(1))
+    for i in (1, 1, 999):
+        await UnfollowPerson(following_uows).execute(identity(i), context)
+    assert removed is not None
+    before.pop((context.profile_id, removed))
+    engine = create_async_engine(TEST_DATABASE_URL, hide_parameters=True)
+    try:
+        sessions = async_sessionmaker(engine)
+        async with PostgresFollowingUnitOfWork(sessions) as fresh:
+            assert {(r.profile_id, r.person_id): r.followed_at for r in await fresh.session.scalars(select(FollowRow))} == before
+    finally:
+        await engine.dispose()
+
+
+async def test_unfollow_rollback_and_cancel_restore_relationship(following_uows: Factory) -> None:
+    context = await seed(following_uows)
+    await FollowPerson(following_uows).execute(identity(1), context)
+    ready = asyncio.Event()
+    async def interrupted(cancel: bool) -> None:
+        async with following_uows() as uow:
+            assert await uow.follows.lock_profile(context.profile_id)
+            person_id = await uow.follows.find_person(identity(1))
+            assert person_id is not None
+            await uow.follows.remove(context.profile_id, person_id)
+            if not cancel:
+                raise RuntimeError('rollback')
+            ready.set()
+            await asyncio.Event().wait()
+    with pytest.raises(RuntimeError, match='rollback'):
+        await interrupted(False)
+    task = asyncio.create_task(interrupted(True))
+    await asyncio.wait_for(ready.wait(), 1)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await asyncio.wait_for(task, .5)
+    assert [p.provider_id for p in (await ListFollowing(following_uows).execute(context)).people] == [1]
+    await UnfollowPerson(following_uows).execute(identity(1), context)
+    assert (await ListFollowing(following_uows).execute(context)).people == ()
+
+
+@pytest.mark.parametrize('delete_first', [True, False])
+@pytest.mark.parametrize('same_person', [True, False])
+async def test_follow_and_unfollow_share_profile_lock(following_uows: Factory, delete_first: bool, same_person: bool) -> None:
+    context = await seed(following_uows)
+    for i in (1, 2, 3):
+        await FollowPerson(following_uows).execute(identity(i), context)
+    entered, release, waiting = asyncio.Event(), asyncio.Event(), asyncio.Event()
+
+    class GatedUnitOfWork(PostgresFollowingUnitOfWork):
+        @override
+        async def commit(self) -> None:
+            entered.set()
+            await release.wait()
+            await super().commit()
+
+    class WaitingUnitOfWork(PostgresFollowingUnitOfWork):
+        @override
+        async def __aenter__(self) -> Self:
+            await super().__aenter__()
+            waiting.set()
+            return self
+
+    factory = following_uows().factory
+    gated = lambda: GatedUnitOfWork(factory)
+    queued = lambda: WaitingUnitOfWork(factory)
+    follow_identity = identity(1 if same_person else 4)
+    # A rejected fourth follow never reaches commit, so hold the lock explicitly.
+    async with following_uows() as blocker:
+        assert await blocker.follows.lock_profile(context.profile_id)
+        if delete_first:
+            first = asyncio.create_task(UnfollowPerson(gated).execute(identity(1), context))
+        else:
+            first = asyncio.create_task(FollowPerson(gated).execute(follow_identity, context))
+        await blocker.rollback()
+        if delete_first or same_person:
+            await asyncio.wait_for(entered.wait(), 2)
+        else:
+            with pytest.raises(FollowingFailed, match='follow_limit'):
+                await asyncio.wait_for(first, 2)
+        if delete_first:
+            second = asyncio.create_task(FollowPerson(queued).execute(follow_identity, context))
+        else:
+            second = asyncio.create_task(UnfollowPerson(queued).execute(identity(1), context))
+        await asyncio.wait_for(waiting.wait(), 1)
+        if delete_first or same_person:
+            await asyncio.wait_for(ListFollowing(following_uows).execute(GuestContext(uuid4(), 'unrelated')), .5)
+            assert not second.done()
+        release.set()
+        if delete_first or same_person:
+            await asyncio.wait_for(first, 2)
+        await asyncio.wait_for(second, 2)
+    result = {p.provider_id for p in (await ListFollowing(following_uows).execute(context)).people}
+    assert result == ({1, 2, 3} if same_person and delete_first else {2, 3, 4} if delete_first else {2, 3})
+
+
+async def test_waiting_unfollow_cancel_releases_resources(following_uows: Factory) -> None:
+    context = await seed(following_uows)
+    await FollowPerson(following_uows).execute(identity(1), context)
+    started = asyncio.Event()
+    class WaitingUnitOfWork(PostgresFollowingUnitOfWork):
+        @override
+        async def __aenter__(self) -> Self:
+            await super().__aenter__()
+            started.set()
+            return self
+    async with following_uows() as blocker:
+        assert await blocker.follows.lock_profile(context.profile_id)
+        task = asyncio.create_task(UnfollowPerson(lambda: WaitingUnitOfWork(following_uows().factory)).execute(identity(1), context))
+        await asyncio.wait_for(started.wait(), 1)
+        await asyncio.wait_for(ListFollowing(following_uows).execute(GuestContext(uuid4(), 'other')), .5)
+        assert not task.done()
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await asyncio.wait_for(task, .5)
+    assert len((await ListFollowing(following_uows).execute(context)).people) == 1
+    await UnfollowPerson(following_uows).execute(identity(1), context)

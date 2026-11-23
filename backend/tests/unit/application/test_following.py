@@ -3,7 +3,11 @@ from uuid import uuid4
 
 import pytest
 
-from lumiere.application.use_cases.following import FollowPerson, ListFollowing
+from lumiere.application.use_cases.following import (
+    FollowPerson,
+    ListFollowing,
+    UnfollowPerson,
+)
 from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import FollowingFailed
 from lumiere.domain.following import PersonIdentity
@@ -76,16 +80,18 @@ async def test_fourth_distinct_follow_is_rejected(store: MemoryFollowing, contex
     assert store.commits == 3
 
 
+@pytest.mark.parametrize('use_case', [FollowPerson, UnfollowPerson])
 @pytest.mark.parametrize('raw', [True, '4139', 1.5, 0, -1, 2**53])
-async def test_invalid_identity_has_no_storage_work(store: MemoryFollowing, context: GuestContext, raw: object) -> None:
+async def test_invalid_identity_has_no_storage_work(store: MemoryFollowing, context: GuestContext, raw: object, use_case: type[FollowPerson] | type[UnfollowPerson]) -> None:
     with pytest.raises(FollowingFailed, match='invalid_identity'):
-        await FollowPerson(store).execute(PersonIdentity(CatalogProvider.TMDB, cast(int, raw)), context)
+        await use_case(store).execute(PersonIdentity(CatalogProvider.TMDB, cast(int, raw)), context)
     assert not store.operations
 
 
-async def test_unsupported_provider_has_no_storage_work(store: MemoryFollowing, context: GuestContext) -> None:
+@pytest.mark.parametrize('use_case', [FollowPerson, UnfollowPerson])
+async def test_unsupported_provider_has_no_storage_work(store: MemoryFollowing, context: GuestContext, use_case: type[FollowPerson] | type[UnfollowPerson]) -> None:
     with pytest.raises(FollowingFailed, match='invalid_identity'):
-        await FollowPerson(store).execute(PersonIdentity(cast(CatalogProvider, 'other'), 4139), context)
+        await use_case(store).execute(PersonIdentity(cast(CatalogProvider, 'other'), 4139), context)
     assert not store.operations
 
 
@@ -107,3 +113,40 @@ async def test_commit_failure_never_persists_membership(store: MemoryFollowing, 
     assert store.memberships == {}
     assert store.rollbacks == 1
     assert store.commits == 0
+
+
+async def test_unfollow_commits_only_owned_relationship(store: MemoryFollowing, context: GuestContext) -> None:
+    other = GuestContext(uuid4(), 'other')
+    store.profiles.add(other.profile_id)
+    for owner, i in ((context, 4139), (context, 2), (other, 4139)):
+        await FollowPerson(store).execute(identity(i), owner)
+    before = dict(store.memberships)
+    store.operations.clear()
+    assert await UnfollowPerson(store).execute(identity(), context) is None
+    before.pop((context.profile_id, 4139))
+    assert store.memberships == before
+    assert store.operations == ['enter', 'lock_profile', 'find_person', 'remove', 'commit']
+
+
+async def test_unfollow_absent_relationship_and_person_are_idempotent(store: MemoryFollowing, context: GuestContext) -> None:
+    for i in (4139, 4139, 999):
+        assert await UnfollowPerson(store).execute(identity(i), context) is None
+    assert store.memberships == {}
+    assert store.commits == 3
+    assert not {'add', 'count', 'list_people'}.intersection(store.operations)
+
+
+async def test_unfollow_rejects_missing_profile(store: MemoryFollowing) -> None:
+    with pytest.raises(FollowingFailed, match='session'):
+        await UnfollowPerson(store).execute(identity(), GuestContext(uuid4(), 'other'))
+    assert store.operations == ['enter', 'lock_profile', 'rollback']
+
+
+async def test_unfollow_commit_failure_preserves_membership(store: MemoryFollowing, context: GuestContext) -> None:
+    await FollowPerson(store).execute(identity(), context)
+    before = dict(store.memberships)
+    store.commit_error = RuntimeError('storage')
+    with pytest.raises(RuntimeError, match='storage'):
+        await UnfollowPerson(store).execute(identity(), context)
+    assert store.memberships == before
+    assert store.rollbacks == 1

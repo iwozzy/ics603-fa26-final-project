@@ -68,6 +68,10 @@ class MemoryFollowingTransaction:
         self.store.operations.append('count')
         return sum(owner == profile_id for owner, _ in self.memberships)
 
+    async def remove(self, profile_id: UUID, person_id: int) -> None:
+        self.store.operations.append('remove')
+        self.memberships.pop((profile_id, person_id), None)
+
     async def add(self, profile_id: UUID, person_id: int) -> None:
         self.store.operations.append('add')
         self.store.sequence += 1
