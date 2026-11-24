@@ -172,9 +172,17 @@ test('follow people touch reveals first, switches, dismisses and scrolls without
     const session = await context.newCDPSession(page);
     const bounds = await row(page, 2).boundingBox(); expect(bounds).not.toBeNull();
     const x = bounds!.x + 20, y = Math.min(bounds!.y + 20, 550);
+    // Listen before the swipe so a fast scrollend cannot be missed.
+    const scrollCompletion = await page.evaluateHandle(() => {
+      const state = { finished: false };
+      document.addEventListener('scrollend', () => { state.finished = true; }, { capture: true, once: true });
+      return state;
+    });
     await session.send('Input.dispatchTouchEvent', { type: 'touchStart', touchPoints: [{ x, y }] });
     await session.send('Input.dispatchTouchEvent', { type: 'touchMove', touchPoints: [{ x, y: y - 80 }] });
     await session.send('Input.dispatchTouchEvent', { type: 'touchEnd', touchPoints: [] });
+    await page.waitForFunction(state => state.finished, scrollCompletion, { timeout: 10000 });
+    await scrollCompletion.dispose();
     expect(posts).toBe(1);
     await expect(row(page, 2).getByRole('button')).toHaveCSS('opacity', '0');
     await page.getByRole('link', { name: 'Following', exact: true }).tap();
