@@ -1,6 +1,7 @@
 from uuid import UUID
 
-from sqlalchemy import delete, func, select
+from sqlalchemy import delete, literal, select
+from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from lumiere.adapters.outbound.clients.tmdb_people.mapper import image_url
@@ -20,15 +21,6 @@ class PostgresFollowingRepository:
     async def lock_profile(self, profile_id: UUID) -> bool:
         return await self.session.scalar(select(GuestProfileRow.id).where(GuestProfileRow.id == profile_id).with_for_update()) is not None
 
-    async def find_person(self, identity: PersonIdentity) -> int | None:
-        return await self.session.scalar(select(PersonRow.id).where(PersonRow.tmdb_id == identity.provider_id))
-
-    async def is_following(self, profile_id: UUID, person_id: int) -> bool:
-        return await self.session.scalar(select(FollowRow.person_id).where(FollowRow.profile_id == profile_id, FollowRow.person_id == person_id)) is not None
-
-    async def count(self, profile_id: UUID) -> int:
-        return (await self.session.scalar(select(func.count()).select_from(FollowRow).where(FollowRow.profile_id == profile_id))) or 0
-
     async def remove(self, profile_id: UUID, identity: PersonIdentity) -> None:
         await self.session.execute(delete(FollowRow).where(
             FollowRow.profile_id == profile_id,
@@ -36,9 +28,13 @@ class PostgresFollowingRepository:
             PersonRow.tmdb_id == identity.provider_id,
         ).execution_options(synchronize_session=False))
 
-    async def add(self, profile_id: UUID, person_id: int) -> None:
-        self.session.add(FollowRow(profile_id=profile_id, person_id=person_id))
-        await self.session.flush()
+    async def add(self, profile_id: UUID, identity: PersonIdentity) -> bool:
+        person = select(PersonRow.id).where(PersonRow.tmdb_id == identity.provider_id).cte('person')
+        inserted = insert(FollowRow).from_select(
+            ['profile_id', 'person_id'], select(literal(profile_id), person.c.id),
+        ).on_conflict_do_nothing(index_elements=[FollowRow.profile_id, FollowRow.person_id]).cte('inserted')
+        # Select the candidate, not INSERT RETURNING: repeats still have a person.
+        return await self.session.scalar(select(person.c.id).add_cte(inserted)) is not None
 
     async def list_people(self, profile_id: UUID) -> tuple[PersonSummary, ...]:
         rows = await self.session.scalars(select(PersonRow).join(FollowRow, FollowRow.person_id == PersonRow.id).where(FollowRow.profile_id == profile_id).order_by(FollowRow.followed_at.desc(), FollowRow.person_id.desc()))

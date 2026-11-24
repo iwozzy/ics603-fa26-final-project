@@ -55,19 +55,6 @@ class MemoryFollowingTransaction:
         self.store.operations.append('lock_profile')
         return profile_id in self.store.profiles
 
-    async def find_person(self, identity: PersonIdentity) -> int | None:
-        self.store.operations.append('find_person')
-        return next((key for key, person in self.store.people.items()
-                     if (person.provider, person.provider_id) == (identity.provider, identity.provider_id)), None)
-
-    async def is_following(self, profile_id: UUID, person_id: int) -> bool:
-        self.store.operations.append('is_following')
-        return (profile_id, person_id) in self.memberships
-
-    async def count(self, profile_id: UUID) -> int:
-        self.store.operations.append('count')
-        return sum(owner == profile_id for owner, _ in self.memberships)
-
     async def remove(self, profile_id: UUID, identity: PersonIdentity) -> None:
         self.store.operations.append('remove')
         for person_id, person in self.store.people.items():
@@ -75,10 +62,16 @@ class MemoryFollowingTransaction:
                 self.memberships.pop((profile_id, person_id), None)
                 break
 
-    async def add(self, profile_id: UUID, person_id: int) -> None:
+    async def add(self, profile_id: UUID, identity: PersonIdentity) -> bool:
         self.store.operations.append('add')
-        self.store.sequence += 1
-        self.memberships[profile_id, person_id] = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=self.store.sequence)
+        person_id = next((key for key, person in self.store.people.items()
+                          if (person.provider, person.provider_id) == (identity.provider, identity.provider_id)), None)
+        if person_id is None:
+            return False
+        if (profile_id, person_id) not in self.memberships:
+            self.store.sequence += 1
+            self.memberships[profile_id, person_id] = datetime(2026, 1, 1, tzinfo=UTC) + timedelta(seconds=self.store.sequence)
+        return True
 
     async def list_people(self, profile_id: UUID) -> tuple[PersonSummary, ...]:
         self.store.operations.append('list_people')

@@ -19,14 +19,11 @@ class FollowPerson:
         async with self.factory() as uow:
             if not await uow.follows.lock_profile(context.profile_id):
                 raise FollowingFailed('session')
-            person_id = await uow.follows.find_person(identity)
-            if person_id is None:
+            if not await uow.follows.add(context.profile_id, identity):
                 raise FollowingFailed('missing_person')
-            if not await uow.follows.is_following(context.profile_id, person_id):
-                if await uow.follows.count(context.profile_id) >= GUEST_FOLLOW_LIMIT:
-                    raise FollowingFailed('follow_limit')
-                await uow.follows.add(context.profile_id, person_id)
             snapshot = FollowingSnapshot(await uow.follows.list_people(context.profile_id), GUEST_FOLLOW_LIMIT)
+            if len(snapshot.people) > GUEST_FOLLOW_LIMIT:
+                raise FollowingFailed('follow_limit')
             await uow.commit()
             return snapshot
 

@@ -44,6 +44,55 @@ async def seed(factory: Factory) -> GuestContext:
     return context
 
 
+@pytest.mark.parametrize(('existing', 'target', 'failure', 'expected'), [
+    ((), 4, None, [4]),
+    ((1, 2, 3), 1, None, [3, 2, 1]),
+    ((1, 2, 3), 4, 'follow_limit', [3, 2, 1]),
+])
+async def test_follow_uses_three_statements(
+    following_uows: Factory, existing: tuple[int, ...], target: int,
+    failure: str | None, expected: list[int],
+) -> None:
+    context = await seed(following_uows)
+    follow = FollowPerson(following_uows)
+    for i in existing:
+        await follow.execute(identity(i), context)
+    statements: list[str] = []
+    def capture(*args: object) -> None:
+        statements.append(str(args[2]))
+    async with following_uows() as observer:
+        connection = await observer.session.connection()
+        sync_connection = connection.sync_connection
+        assert sync_connection is not None
+        engine = sync_connection.engine
+        event.listen(engine, 'before_cursor_execute', capture)
+        try:
+            if failure is None:
+                result = await follow.execute(identity(target), context)
+                assert [p.provider_id for p in result.people] == expected
+            else:
+                with pytest.raises(FollowingFailed, match=failure):
+                    await follow.execute(identity(target), context)
+        finally:
+            event.remove(engine, 'before_cursor_execute', capture)
+    # A fresh transaction must never see the speculative fourth membership.
+    result = await ListFollowing(following_uows).execute(context)
+    assert [p.provider_id for p in result.people] == expected
+    assert len(statements) == 3
+
+
+@pytest.mark.parametrize('existing', [(), (1, 2, 3)])
+async def test_missing_person_fails_even_at_cap(following_uows: Factory, existing: tuple[int, ...]) -> None:
+    context = await seed(following_uows)
+    follow = FollowPerson(following_uows)
+    for i in existing:
+        await follow.execute(identity(i), context)
+    before = await ListFollowing(following_uows).execute(context)
+    with pytest.raises(FollowingFailed, match='missing_person'):
+        await follow.execute(identity(999), context)
+    assert await ListFollowing(following_uows).execute(context) == before
+
+
 async def test_following_newest_first_and_repeat_preserves_timestamp(following_uows: Factory) -> None:
     context = await seed(following_uows)
     follow = FollowPerson(following_uows)
@@ -73,7 +122,7 @@ async def test_two_concurrent_distinct_follows_from_two_allow_exactly_one(follow
     failures = [r for r in results if isinstance(r, FollowingFailed)]
     assert len(failures) == 1 and failures[0].category == 'follow_limit'
     async with following_uows() as uow:
-        assert await uow.follows.count(context.profile_id) == 3
+        assert len(await uow.follows.list_people(context.profile_id)) == 3
 
 
 async def test_concurrent_repeat_creates_one_row(following_uows: Factory) -> None:
@@ -82,7 +131,7 @@ async def test_concurrent_repeat_creates_one_row(following_uows: Factory) -> Non
     results = await asyncio.wait_for(asyncio.gather(*(follow.execute(identity(1), context) for _ in range(2))), 3)
     assert all(len(r.people) == 1 for r in results)
     async with following_uows() as uow:
-        assert await uow.follows.count(context.profile_id) == 1
+        assert len(await uow.follows.list_people(context.profile_id)) == 1
 
 
 async def test_following_uses_current_summary_and_profile_ownership(following_uows: Factory) -> None:
@@ -131,17 +180,13 @@ async def test_rollback_and_cancel_leave_no_membership(following_uows: Factory) 
     with pytest.raises(RuntimeError):
         async with following_uows() as uow:
             assert await uow.follows.lock_profile(context.profile_id)
-            person_id = await uow.follows.find_person(identity(1))
-            assert person_id is not None
-            await uow.follows.add(context.profile_id, person_id)
+            assert await uow.follows.add(context.profile_id, identity(1))
             raise RuntimeError('rollback')
     ready = asyncio.Event()
     async def interrupted() -> None:
         async with following_uows() as uow:
             assert await uow.follows.lock_profile(context.profile_id)
-            person_id = await uow.follows.find_person(identity(1))
-            assert person_id is not None
-            await uow.follows.add(context.profile_id, person_id)
+            assert await uow.follows.add(context.profile_id, identity(1))
             ready.set()
             await asyncio.Event().wait()
     task = asyncio.create_task(interrupted())
@@ -173,7 +218,7 @@ async def test_unfollow_survives_fresh_engine(following_uows: Factory) -> None:
         await FollowPerson(following_uows).execute(identity(i), owner)
     async with following_uows() as uow:
         before = {(r.profile_id, r.person_id): r.followed_at for r in await uow.session.scalars(select(FollowRow))}
-        removed = await uow.follows.find_person(identity(1))
+        removed = await uow.session.scalar(select(PersonRow.id).where(PersonRow.tmdb_id == 1))
     for i in (1, 1, 999):
         await UnfollowPerson(following_uows).execute(identity(i), context)
     assert removed is not None

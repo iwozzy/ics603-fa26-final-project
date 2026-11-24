@@ -39,7 +39,7 @@ async def test_follow_records_matching_person_before_success(store: MemoryFollow
     assert result.limit == 3
     assert [p.provider_id for p in result.people] == [4139]
     assert store.commits == 1
-    assert store.operations.index('lock_profile') < store.operations.index('count')
+    assert store.operations.index('lock_profile') < store.operations.index('add')
     assert store.operations.index('list_people') < store.operations.index('commit')
 
 
@@ -57,7 +57,7 @@ async def test_missing_profile_is_rejected(store: MemoryFollowing) -> None:
     assert store.operations == ['enter', 'lock_profile', 'rollback']
 
 
-async def test_existing_follow_succeeds_at_three_without_insert(store: MemoryFollowing, context: GuestContext) -> None:
+async def test_existing_follow_succeeds_at_three_without_changing_timestamp(store: MemoryFollowing, context: GuestContext) -> None:
     follow = FollowPerson(store)
     for i in (4139, 2, 3):
         await follow.execute(identity(i), context)
@@ -66,18 +66,20 @@ async def test_existing_follow_succeeds_at_three_without_insert(store: MemoryFol
     result = await follow.execute(identity(), context)
     assert store.memberships == before
     assert [p.provider_id for p in result.people] == [3, 2, 4139]
-    assert 'add' not in store.operations
-    assert 'count' not in store.operations
+    assert store.operations == ['enter', 'lock_profile', 'add', 'list_people', 'commit']
 
 
 async def test_fourth_distinct_follow_is_rejected(store: MemoryFollowing, context: GuestContext) -> None:
     follow = FollowPerson(store)
     for i in (4139, 2, 3):
         await follow.execute(identity(i), context)
+    before = dict(store.memberships)
+    store.operations.clear()
     with pytest.raises(FollowingFailed, match='follow_limit'):
         await follow.execute(identity(4), context)
-    assert len(store.memberships) == 3
+    assert store.memberships == before
     assert store.commits == 3
+    assert store.operations == ['enter', 'lock_profile', 'add', 'list_people', 'rollback']
 
 
 @pytest.mark.parametrize('use_case', [FollowPerson, UnfollowPerson])

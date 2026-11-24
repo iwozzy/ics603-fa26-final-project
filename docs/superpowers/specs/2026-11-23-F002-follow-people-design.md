@@ -314,7 +314,13 @@ session per operation, with awaitable repository and transaction methods. Do not
 share active sessions across concurrent requests. Domain/application layers do
 not import ORM, HTTP, or provider clients.
 
-For POST, after resolving the requesting guest:
+The [approved Follow query simplification amendment](2026-11-23-F002-follow-query-simplification-design.md)
+supersedes the original POST sequence below: retain the profile lock, insert
+idempotently while reporting person existence, and validate the cap from the
+resulting list before commit, rolling back excess insertions. Separate membership
+and count queries are no longer required.
+
+For POST, after resolving the requesting guest (original sequence):
 
 1. Begin a transaction and lock that guest profile row (`SELECT ... FOR UPDATE`).
    Reject a missing profile; cached identity resolution is not proof that the row
@@ -330,8 +336,8 @@ For POST, after resolving the requesting guest:
 5. Read the resulting following snapshot in `followed_at DESC, person_id DESC`
    order, commit, then return HTTP `200`. GET uses the same ordering.
 
-Follow additions must take the profile lock before checking membership and
-count. The approved Unfollow simplification performs one joined DELETE without
+Follow additions must take the profile lock before inserting and validating the
+cap. The approved Unfollow simplification performs one joined DELETE without
 that profile lock; its revised concurrency contract is in the unfollow amendment.
 The composite key also prevents duplicate rows. Count and insert must never
 be separate transactions. The three-follow rule belongs to the use case; locking,
