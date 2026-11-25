@@ -1,5 +1,7 @@
 # F001: Search people
 
+> Amendment — 2026-11-20: The prior identity-deferral and no-person-content-persistence policy is superseded by the [approved asynchronous person persistence design](2026-11-20-search-people-persistence-design.md). Selected summaries now persist best effort through a dedicated pool; provider identity and `known_for_department` are part of the coordinated contract. Historical sections below describe the earlier policy. Before stable V1, coordinated breaking contract changes are acceptable; users may clear their browser cache and reload after changes. Compatibility and cache transition handling will be revisited before stable V1.
+
 Date: 2026-11-13
 
 Status: Approved by the project owner on 2026-11-13, after revisions and clarifications. Details labeled author proposals were accepted with this approval; explicitly deferred decisions remain deferred.

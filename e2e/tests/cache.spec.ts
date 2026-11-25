@@ -40,3 +40,20 @@ test('test_cache_expires_after_10_seconds @cache-expiry', async ({ page, request
   await new Promise(resolve => setTimeout(resolve, 12000));
   await search(page); expect(await counts(request)).toBe(2);
 });
+
+test('following overlay reflects saved identities over real cached search results', async ({ page, request }) => {
+  // No routing: Chromium's actual private HTTP cache remains enabled.
+  await page.goto('/'); await search(page);
+  const row = page.getByTestId('search-result-0');
+  for (let attempt = 0; attempt < 5; attempt++) {
+    await row.hover();
+    const completed = page.waitForResponse(r => r.url().endsWith('/following') && r.request().method() === 'POST');
+    await row.getByRole('button', { name: 'Follow +' }).click();
+    if ((await completed).status() === 200) break;
+    await expect(row.getByRole('button', { name: 'Follow +' })).toBeVisible();
+  }
+  await expect(row.getByRole('status')).toBeVisible();
+  await search(page); await row.hover();
+  await expect(row.getByRole('status')).toBeVisible();
+  expect(await counts(request)).toBe(1);
+});

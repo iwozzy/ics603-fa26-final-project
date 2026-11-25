@@ -3,13 +3,36 @@
 import * as z from 'zod';
 
 /**
+ * CatalogProvider
+ */
+export const zCatalogProvider = z.enum(['tmdb']);
+
+/**
+ * FollowPersonRequest
+ */
+export const zFollowPersonRequest = z.object({
+    provider: zCatalogProvider,
+    provider_id: z.int().gt(0).lte(9007199254740991)
+});
+
+/**
  * PersonResponse
  */
 export const zPersonResponse = z.object({
-    department: z.string().nullable(),
     known_for: z.array(z.string().min(1).regex(/\S/)).max(3),
+    known_for_department: z.string().nullable(),
     name: z.string().min(1).regex(/\S/),
-    profile_image_url: z.string().nullable()
+    profile_image_url: z.string().nullable(),
+    provider: zCatalogProvider,
+    provider_id: z.int().gt(0).lte(9007199254740991)
+});
+
+/**
+ * FollowingResponse
+ */
+export const zFollowingResponse = z.object({
+    limit: z.literal(3),
+    people: z.array(zPersonResponse).max(3)
 });
 
 /**

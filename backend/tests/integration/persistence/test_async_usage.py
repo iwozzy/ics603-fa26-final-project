@@ -17,7 +17,7 @@ from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.domain.access import CounterKey, GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
-from tests.fakes.search import FakeCatalog, FakeClock
+from tests.fakes.search import FakeCatalog, FakeClock, FakePeopleQueue
 
 TOTAL = CounterKey("global", "all", "people_provider", "total")
 DAY = CounterKey("global", "all", "people_provider", "2026-11-15")
@@ -137,7 +137,7 @@ async def test_search_task_executes_no_sql_and_background_writer_persists_six_co
         engine = (await probe.session.connection()).engine.sync_engine
     event.listen(engine, "before_cursor_execute", observe)
     try:
-        await SearchPeople(FakeCatalog(), service, FakeClock()).execute("Tom", GuestContext(uuid4(), "synthetic-ip"))
+        await SearchPeople(FakeCatalog(), service, FakeClock(), FakePeopleQueue()).execute("Tom", GuestContext(uuid4(), "synthetic-ip"))
         assert request_calls == []
         await asyncio.wait_for(service.drain(), 5)
     finally:

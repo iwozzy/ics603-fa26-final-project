@@ -1,7 +1,11 @@
 name: lumiere
 services:
   backend:
-    build: backend
+    build:
+      context: backend
+      platforms:
+        - linux/amd64
+        - linux/arm64
     environment:
       LUMIERE_DATABASE_URL: ${LUMIERE_DATABASE_URL:?supply the pooled application connection}
       LUMIERE_TMDB_ACCESS_TOKEN: ${LUMIERE_TMDB_ACCESS_TOKEN:?supply runtime provider authorization}
@@ -24,7 +28,9 @@ services:
       OTEL_RESOURCE_ATTRIBUTES: ${OTEL_RESOURCE_ATTRIBUTES:-}
     healthcheck:
       test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health/ready', timeout=5)"]
-      interval: 10s
+      start_period: 5m
+      start_interval: 2s
+      interval: 168h
       timeout: 6s
       retries: 5
   web:
@@ -32,6 +38,9 @@ services:
       context: frontend
       additional_contexts:
         ingress: deploy/caddy
+      platforms:
+        - linux/amd64
+        - linux/arm64
     environment:
       SITE_ADDRESS: ${LUMIERE_SITE_ADDRESS:-:8080}
     ports:

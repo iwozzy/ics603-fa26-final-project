@@ -1,10 +1,13 @@
-import { useRef, useState, type ComponentRef } from 'react';
+import { useCallback, useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { PersonRow } from './PersonRow';
+import { useFocusEffect } from 'expo-router';
+import { SearchResults } from './SearchResults';
 import { useSearchPeople } from './useSearchPeople';
 
 export default function SearchPeopleScreen() {
   const state = useSearchPeople();
+  const { reset } = state;
+  useFocusEffect(useCallback(() => reset, [reset]));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [focused, setFocused] = useState(false);
   const [buttonFocused, setButtonFocused] = useState(false);
@@ -29,7 +32,7 @@ export default function SearchPeopleScreen() {
         <Text style={styles.example}>Timothée Chalamet (Actor)</Text>
         <Text style={styles.example}>Hayao Miyazaki (Director, Writer)</Text>
         <Text style={styles.example}>Autumn Durald Arkapaw (Cinematographer)</Text>
-      </View> : <View style={styles.results}>{state.people.map((person, position) => <PersonRow key={state.submittedQuery + ':' + position} person={person} />)}</View>}
+      </View> : <View style={styles.results}><SearchResults people={state.people} resultSetKey={state.submittedQuery} /></View>}
     </View>
   </ScrollView>;
 }

@@ -8,6 +8,12 @@ from alembic.config import Config
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from lumiere.adapters.outbound.persistence.following_unit_of_work import (
+    PostgresFollowingUnitOfWork,
+)
+from lumiere.adapters.outbound.persistence.people_unit_of_work import (
+    PostgresPeopleUnitOfWork,
+)
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 
 TEST_DATABASE_URL = "postgresql+psycopg://lumiere_test@127.0.0.1:15432/lumiere_test"
@@ -36,3 +42,13 @@ async def uows() -> AsyncIterator[Callable[[], PostgresAccessUnitOfWork]]:
     async with engine.begin() as connection:
         await connection.run_sync(migrate, "base")
     await engine.dispose()
+
+
+@pytest.fixture
+def people_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresPeopleUnitOfWork]:
+    return lambda: PostgresPeopleUnitOfWork(uows().factory)
+
+
+@pytest.fixture
+def following_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresFollowingUnitOfWork]:
+    return lambda: PostgresFollowingUnitOfWork(uows().factory)

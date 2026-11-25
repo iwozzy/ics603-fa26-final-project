@@ -2,6 +2,8 @@ from typing import Annotated
 
 from pydantic import BaseModel, ConfigDict, Field, StrictStr
 
+from lumiere.domain.people import MAX_PROVIDER_ID
+
 
 class Envelope(BaseModel):
     model_config = ConfigDict(strict=True, hide_input_in_errors=True)
@@ -10,7 +12,7 @@ class Envelope(BaseModel):
 
 class PersonDTO(BaseModel):
     model_config = ConfigDict(strict=True, hide_input_in_errors=True)
-    id: Annotated[int, Field(strict=True, gt=0)]
+    id: Annotated[int, Field(strict=True, gt=0, le=MAX_PROVIDER_ID)]
     name: StrictStr
     known_for_department: object = None
     profile_path: object = None

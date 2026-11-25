@@ -4,9 +4,15 @@ from uuid import uuid4
 
 import httpx
 import pytest
-from sqlalchemy.ext.asyncio import AsyncEngine
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.adapters.outbound.persistence.pools import PoolRegistry
+from lumiere.application.people_writer import PeopleWriter
+from lumiere.application.use_cases.following import (
+    FollowPerson,
+    ListFollowing,
+    UnfollowPerson,
+)
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
@@ -15,7 +21,9 @@ from lumiere.domain.access import CounterKey, GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from tests.fakes.access import MemoryUow
 from tests.fakes.accounting import ControlledAccess
-from tests.fakes.search import FakeCatalog, FakeClock
+from tests.fakes.following import MemoryFollowing
+from tests.fakes.people import ControlledPeoplePersistence
+from tests.fakes.search import FakeCatalog, FakeClock, FakePeopleQueue
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 TOTAL = CounterKey("global", "all", "people_provider", "total")
@@ -28,14 +36,14 @@ class EngineProbe:
         self.access = access
         self.disposed = False
 
-    async def dispose(self) -> None:
+    async def close(self) -> None:
         assert not self.access.active
         self.disposed = True
 
 
 def make_container(access: ControlledAccess, admission: UsageAdmissionService, probe: EngineProbe) -> AppContainer:
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock()), GuestIdentityService(access, POLICY), b"synthetic-test-key")
-    return AppContainer(services, httpx.AsyncClient(), cast(AsyncEngine, probe), admission)
+    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(access, POLICY), b"synthetic-test-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()), unfollow_person=UnfollowPerson(MemoryFollowing()))
+    return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, probe), admission, PeopleWriter(ControlledPeoplePersistence()))
 
 
 async def test_container_hydrates_before_serving_and_drains_before_disposal() -> None:
@@ -50,7 +58,15 @@ async def test_container_hydrates_before_serving_and_drains_before_disposal() ->
         await admission.admit_and_charge(CONTEXT, NOW)
         await asyncio.wait_for(access.entered.wait(), 1)
         closing = asyncio.create_task(container.close())
-        await asyncio.sleep(0)
+        # Concurrent, cancellation-safe cleanup schedules both writer closes.
+        # Wait for admission's observable stop rather than a fixed loop count.
+        async with asyncio.timeout(1):
+            while True:
+                try:
+                    admission.check_ready()
+                except SearchFailed:
+                    break
+                await asyncio.sleep(0)
         assert not probe.disposed
         with pytest.raises(SearchFailed, match="storage"):
             await admission.admit_and_charge(CONTEXT, NOW)

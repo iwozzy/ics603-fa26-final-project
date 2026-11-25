@@ -1,9 +1,10 @@
+import { mapSearchResult } from './mappers';
 import { HttpGuestSessionRepository } from './guest-session-repository';
 import { HttpPeopleSearchRepository } from './people-search-repository';
 
-const payload = { query: 'Tom', people: [{ name: 'Tom', department: null, profile_image_url: null, known_for: ['Alien'], id: 42 }] };
+const payload = { query: 'Tom', people: [{ provider: 'tmdb', provider_id: 4139, name: 'Tom', known_for_department: null, profile_image_url: null, known_for: ['Alien'], id: 42 }] };
 function response(status: number, body: unknown = payload): Response {
-  return { ok: status === 200, status, json: async () => body } as Response;
+  return { ok: status === 200, status, headers: new Headers({ 'X-Lumiere-Guest-Created': 'false' }), json: async () => body } as Response;
 }
 function harness(searchResponse = response(200)) {
   const fetcher = jest.fn<ReturnType<typeof fetch>, [input: RequestInfo | URL, init?: RequestInit]>().mockImplementation(async (url) => url === '/api/v1/guest-session' ? response(200) : searchResponse);
@@ -20,7 +21,7 @@ test('encodes once, uses cookie transport and platform cache, strips ids', async
   expect(options?.credentials).toBe('same-origin');
   expect(options?.cache).toBeUndefined();
   expect(options?.headers).toBeUndefined();
-  expect(result.people[0]).toEqual({ name: 'Tom', department: null, profileImageUrl: null, knownFor: ['Alien'] });
+  expect(result.people[0]).toEqual({ provider: 'tmdb', providerId: 4139, name: 'Tom', knownForDepartment: null, profileImageUrl: null, knownFor: ['Alien'] });
   expect(result.people[0]).not.toHaveProperty('id');
 });
 
@@ -82,4 +83,12 @@ test('cancelling one bootstrap waiter leaves another submission usable', async (
 test('accepts a response query containing 200 non-BMP code points', async () => {
   const { repository } = harness(response(200, { query: '😀'.repeat(200), people: [] }));
   await expect(repository.search('😀'.repeat(200), signal())).resolves.toEqual({ query: '😀'.repeat(200), people: [] });
+});
+
+function payloadWithId(id: number) { return { ...payload, people: [{ ...payload.people[0], provider_id: id }] }; }
+test('retains exact safe provider identity and rejects unsafe numbers', () => {
+  expect(mapSearchResult(payloadWithId(Number.MAX_SAFE_INTEGER)).people[0].providerId).toBe(Number.MAX_SAFE_INTEGER);
+  for (const id of [Number.MAX_SAFE_INTEGER + 1, 0, -1, 1.5]) {
+    expect(() => mapSearchResult(payloadWithId(id))).toThrow();
+  }
 });

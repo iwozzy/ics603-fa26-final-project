@@ -10,7 +10,7 @@ from lumiere.domain.access import GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from lumiere.domain.people import PersonSummary
 from tests.fakes.accounting import ControlledAccess
-from tests.fakes.search import FakeClock
+from tests.fakes.search import FakeClock, FakePeopleQueue, sample_person
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 CONTEXT = GuestContext(uuid4(), "synthetic-ip")
@@ -31,10 +31,10 @@ async def test_provider_outcome_keeps_local_charge_and_persists_asynchronously(e
                 await admission.admit_and_charge(CONTEXT, FakeClock().now())
             if error is not None:
                 raise error
-            return (PersonSummary("Tom", None, None, ()),)
+            return (sample_person(),)
 
     try:
-        search = SearchPeople(Catalog(), admission, FakeClock())
+        search = SearchPeople(Catalog(), admission, FakeClock(), FakePeopleQueue())
         if isinstance(error, asyncio.CancelledError):
             with pytest.raises(asyncio.CancelledError):
                 await search.execute("Tom", CONTEXT)
@@ -63,7 +63,7 @@ async def test_cancelling_request_during_provider_does_not_cancel_persistence() 
             await asyncio.Event().wait()
             return ()
 
-    task = asyncio.create_task(SearchPeople(Catalog(), admission, FakeClock()).execute("Tom", CONTEXT))
+    task = asyncio.create_task(SearchPeople(Catalog(), admission, FakeClock(), FakePeopleQueue()).execute("Tom", CONTEXT))
     try:
         await asyncio.wait_for(started.wait(), 1)
         task.cancel()

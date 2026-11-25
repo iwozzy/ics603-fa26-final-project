@@ -36,7 +36,7 @@ async def test_strict_required_tolerant_optional_fields() -> None:
         people = await TMDBPeopleCatalog(client).search_first_page("Timothée O'Neil & 李😀")
     assert [p.name for p in people] == ["李😀", "Fallback"]
     assert people[0].known_for == ("A", "B", "C")
-    assert people[0].department is None
+    assert people[0].known_for_department is None
     assert people[0].profile_image_url is None
     assert people[1].known_for == ()
     assert people[1].profile_image_url is None
@@ -72,3 +72,30 @@ async def test_timeout_throttle_bad_json_oversize_have_one_attempt(kind: str) ->
         with pytest.raises(SearchFailed):
             await TMDBPeopleCatalog(client, max_bytes=1024).search_first_page("Tom")
     assert len(requests) == 1
+
+
+async def test_provider_identity_and_relative_profile_path() -> None:
+    async with httpx.AsyncClient(base_url="https://catalog.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json=json.loads(FIXTURE.read_text())))) as client:
+        person = (await TMDBPeopleCatalog(client).search_first_page("Tom"))[0]
+    assert person.provider == "tmdb"
+    assert person.provider_id == 4139
+    assert person.provider_profile_path == "/oWFCyBLm1lsbsbT5Nmx3SPMaqFZ.jpg"
+    assert person.known_for == ("Alien", "Top Gun", "Contact")
+
+
+@pytest.mark.parametrize("identifier", [2**53-1, 2**53, True, "42", 0, -1, 1.5])
+async def test_safe_provider_identity(identifier: object) -> None:
+    async with httpx.AsyncClient(base_url="https://catalog.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": identifier, "name": "Tom"}]}))) as client:
+        people = await TMDBPeopleCatalog(client).search_first_page("Tom")
+    if identifier == 2**53-1:
+        assert people[0].provider_id == 9007199254740991
+    else:
+        assert people == ()
+
+
+@pytest.mark.parametrize("path", [None, [], "", "/", "/../a.jpg", "https://evil.test/a.jpg", "/a?b", "/a#b", "/a b.jpg"])
+async def test_invalid_profile_path_is_not_retained(path: object) -> None:
+    async with httpx.AsyncClient(base_url="https://catalog.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "Tom", "profile_path": path}]}))) as client:
+        person = (await TMDBPeopleCatalog(client).search_first_page("Tom"))[0]
+    assert person.provider_profile_path is None
+    assert person.profile_image_url is None

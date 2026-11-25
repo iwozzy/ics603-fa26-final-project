@@ -50,3 +50,12 @@ test.each(['empty', 'error', 'invalid'])('completion leaves a blank list %s', as
   }
   expect(h.result.current).toMatchObject({ phase: 'blank', people: [] });
 });
+
+test('reset aborts a retained screen search and ignores late results', async () => {
+  const h = await setup(); await h.submit('A');
+  await act(() => h.result.current.reset());
+  expect(h.result.current).toMatchObject({ draft: '', submittedQuery: '', phase: 'initial', people: [] });
+  expect(h.repository.calls[0].signal.aborted).toBe(true);
+  await act(() => h.repository.calls[0].resolve(result('A')));
+  expect(h.result.current.people).toEqual([]);
+});

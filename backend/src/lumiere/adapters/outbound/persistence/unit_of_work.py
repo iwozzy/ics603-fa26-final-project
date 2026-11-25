@@ -1,6 +1,6 @@
 import asyncio
 from types import TracebackType
-from typing import Self
+from typing import Self, override
 
 from sqlalchemy.exc import SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -14,18 +14,13 @@ from lumiere.application.ports.usage import UsageRepository
 from lumiere.domain.errors import SearchFailed
 
 
-class PostgresAccessUnitOfWork:
-    usage: UsageRepository
-    guests: GuestIdentityRepository
-
+class PostgresUnitOfWork:
     def __init__(self, sessions: async_sessionmaker[AsyncSession]) -> None:
         self.factory = sessions
 
     async def __aenter__(self) -> Self:
         self.session = self.factory()
         await self.session.begin()
-        self.usage = PostgresUsageRepository(self.session)
-        self.guests = PostgresGuestIdentityRepository(self.session)
         return self
 
     async def __aexit__(self, exc_type: type[BaseException] | None, exc: BaseException | None, tb: TracebackType | None) -> None:
@@ -52,3 +47,15 @@ class PostgresAccessUnitOfWork:
 
     async def rollback(self) -> None:
         await self.session.rollback()
+
+
+class PostgresAccessUnitOfWork(PostgresUnitOfWork):
+    usage: UsageRepository
+    guests: GuestIdentityRepository
+
+    @override
+    async def __aenter__(self) -> Self:
+        await super().__aenter__()
+        self.usage = PostgresUsageRepository(self.session)
+        self.guests = PostgresGuestIdentityRepository(self.session)
+        return self

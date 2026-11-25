@@ -13,7 +13,7 @@ from lumiere.domain.access import CounterKey, GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from tests.fakes.access import MemoryUow
 from tests.fakes.accounting import ControlledAccess
-from tests.fakes.search import FakeCatalog, FakeClock
+from tests.fakes.search import FakeCatalog, FakeClock, FakePeopleQueue
 
 NOW = datetime(2026, 11, 15, 23, 59, tzinfo=UTC)
 CONTEXT = GuestContext(uuid4(), "synthetic-ip")
@@ -37,7 +37,7 @@ async def test_unstarted_admission_fails_closed_without_dispatch() -> None:
     access, catalog = ControlledAccess(), FakeCatalog()
     service = UsageAdmissionService(access, POLICY)
     with pytest.raises(SearchFailed, match="storage"):
-        await SearchPeople(catalog, service, FakeClock()).execute("Tom", CONTEXT)
+        await SearchPeople(catalog, service, FakeClock(), FakePeopleQueue()).execute("Tom", CONTEXT)
     assert catalog.queries == []
     assert access.opens == 0
 
@@ -49,7 +49,7 @@ async def test_search_returns_while_persistence_is_blocked(running: tuple[Contro
     await asyncio.wait_for(access.entered.wait(), 1)
     opens = access.opens
     catalog = FakeCatalog()
-    await asyncio.wait_for(SearchPeople(catalog, service, FakeClock()).execute("Tom", CONTEXT), 0.2)
+    await asyncio.wait_for(SearchPeople(catalog, service, FakeClock(), FakePeopleQueue()).execute("Tom", CONTEXT), 0.2)
     assert catalog.queries == ["Tom"]
     assert access.opens == opens
     assert access.counts == {}

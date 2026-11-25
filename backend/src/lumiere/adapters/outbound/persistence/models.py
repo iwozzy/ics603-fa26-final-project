@@ -1,6 +1,17 @@
+from datetime import datetime
 from uuid import UUID
 
-from sqlalchemy import BigInteger, CheckConstraint, ForeignKey, LargeBinary, String
+from sqlalchemy import (
+    BigInteger,
+    CheckConstraint,
+    DateTime,
+    ForeignKey,
+    LargeBinary,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
 
@@ -35,3 +46,24 @@ class UsageFlushCheckpointRow(Base):
     __table_args__ = (CheckConstraint("sequence >= 0", name="nonnegative_flush_sequence"),)
     writer_id: Mapped[UUID] = mapped_column(primary_key=True)
     sequence: Mapped[int] = mapped_column(BigInteger, nullable=False)
+
+
+class PersonRow(Base):
+    __tablename__ = "people"
+    __table_args__ = (
+        CheckConstraint("tmdb_id > 0"),
+        CheckConstraint("length(btrim(name)) > 0"),
+    )
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=False, server_default=text("((('x'::text || substr(replace((gen_random_uuid())::text, '-'::text, ''::text), 1, 10)))::bit(40))::bigint"))
+    tmdb_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
+    known_for_department: Mapped[str | None] = mapped_column(Text)
+    name: Mapped[str] = mapped_column(Text, nullable=False)
+    known_for: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    tmdb_profile_path: Mapped[str | None] = mapped_column(Text)
+
+
+class FollowRow(Base):
+    __tablename__ = 'follows'
+    profile_id: Mapped[UUID] = mapped_column(ForeignKey('guest_profiles.id'), primary_key=True)
+    person_id: Mapped[int] = mapped_column(BigInteger, ForeignKey('people.id'), primary_key=True)
+    followed_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, server_default=text('clock_timestamp()'))

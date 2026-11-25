@@ -13,6 +13,10 @@ test('fixture order, mixed titles, keyboard/icon and image fallback', async ({ p
   await input(page).press('Enter');
   const first = await response;
   expect(first.status()).toBe(200); expect(first.headers()['cache-control']).toBe('private, max-age=300'); expect(first.headers()['vary'] ?? '').not.toMatch(/cookie/i);
+  const body = await first.json();
+  expect(body.people[0]).toMatchObject({ provider: 'tmdb', provider_id: 4139, known_for_department: 'Acting' });
+  expect(body.people[0]).not.toHaveProperty('department');
+  expect(body.people[0]).not.toHaveProperty('id');
   for (const name of names) await expect(page.getByText(name, { exact: true })).toBeVisible();
   const text = await page.locator('body').innerText();
   expect(names.map(name => text.indexOf(name))).toEqual([...names.map(name => text.indexOf(name))].sort((a,b) => a-b));
