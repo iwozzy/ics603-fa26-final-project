@@ -58,7 +58,7 @@ class PersonRow(Base):
     tmdb_id: Mapped[int] = mapped_column(BigInteger, unique=True, nullable=False)
     known_for_department: Mapped[str | None] = mapped_column(Text)
     name: Mapped[str] = mapped_column(Text, nullable=False)
-    known_for: Mapped[list[str]] = mapped_column(JSONB, nullable=False)
+    known_for: Mapped[list[str]] = mapped_column(JSONB, nullable=False, server_default=text("'[]'::jsonb"))
     tmdb_profile_path: Mapped[str | None] = mapped_column(Text)
 
 
