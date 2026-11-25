@@ -1,0 +1,41 @@
+{
+  "credit_type": "cast",
+  "department": "Acting",
+  "job": "Actor",
+  "media": {
+    "adult": false,
+    "backdrop_path": "/qrRugDSIN9i9u0ClGP7X193Akjf.jpg",
+    "genre_ids": [
+      53,
+      18,
+      9648
+    ],
+    "id": 82390,
+    "title": "The Paperboy",
+    "original_language": "en",
+    "original_title": "The Paperboy",
+    "overview": "A reporter returns to his Florida hometown to investigate a case involving a death row inmate.",
+    "popularity": 2.8464,
+    "poster_path": "/vEQZW279igbQpgQ0SwKuxzxV8UU.jpg",
+    "release_date": "2012-09-14",
+    "softcore": false,
+    "video": false,
+    "vote_average": 5.535,
+    "vote_count": 831,
+    "media_type": "movie",
+    "character": "Ward Jansen"
+  },
+  "media_type": "movie",
+  "id": "52fe484e9251416c91087a6f",
+  "person": {
+    "adult": false,
+    "id": 10297,
+    "name": "Matthew McConaughey",
+    "original_name": "Matthew McConaughey",
+    "popularity": 5.8863,
+    "media_type": "person",
+    "gender": 2,
+    "known_for_department": "Acting",
+    "profile_path": "/lCySuYjhXix3FzQdS4oceDDrXKI.jpg"
+  }
+}
