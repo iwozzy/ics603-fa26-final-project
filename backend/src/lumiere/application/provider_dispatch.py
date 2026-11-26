@@ -26,17 +26,26 @@ class ProviderDispatch:
         self._max_in_flight = max_in_flight
         self._starts: deque[float] = deque()
         self._cooldown_until = float("-inf")
+        self._shutdown_deadline: float | None = None
         self._in_flight = 0
         self._capacity_available = asyncio.Event()
         self._capacity_available.set()
+
+    def stop_at(self, deadline: float) -> None:
+        """Reject new starts at the event loop's monotonic drain deadline."""
+        self._shutdown_deadline = deadline
 
     async def run(
         self, context: GuestContext, operation: Callable[[], Awaitable[PersonFilmography]],
     ) -> PersonFilmography:
         await self._wait_for_availability()
+        now = self._clock.now()
         # Existing usage admission never yields. Gates, charge, and provider entry
         # happen in one event-loop turn.
-        await self._admission.admit_and_charge(context, self._clock.now())
+        if self._shutdown_deadline is not None and asyncio.get_running_loop().time() >= self._shutdown_deadline:
+            # A ready waiter can resume before the shutdown task cancels it.
+            raise asyncio.CancelledError
+        await self._admission.admit_and_charge(context, now)
         self._starts.append(self._clock.monotonic())
         self._in_flight += 1
         if self._in_flight == self._max_in_flight:

@@ -98,16 +98,18 @@ class FilmographyHydrator:
     async def close(self) -> None:
         self._accepting = False
         if self._closing is None:
-            self._closing = asyncio.create_task(self._shutdown(), name='filmography-close')
+            deadline = asyncio.get_running_loop().time() + self._shutdown_timeout
+            self.hydrate.dispatch.stop_at(deadline)
+            self._closing = asyncio.create_task(self._shutdown(deadline), name='filmography-close')
         try:
             await asyncio.shield(self._closing)
         except asyncio.CancelledError:
             await asyncio.shield(self._closing)
             raise
 
-    async def _shutdown(self) -> None:
+    async def _shutdown(self, deadline: float) -> None:
         try:
-            async with asyncio.timeout(self._shutdown_timeout):
+            async with asyncio.timeout_at(deadline):
                 await self.drain()
         except TimeoutError:
             pass

@@ -108,27 +108,51 @@ def runtime(monkeypatch: pytest.MonkeyPatch, *, attempt_timeout: float = 5) -> R
     return Runtime(container, clock, store, access, requests, tuple(dispose.values()), following)
 
 
-async def test_shutdown_drains_gated_work_before_closing_accounting_and_pools(monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(('release_after', 'requests'), [
+    (4.0, ['/3/person/1', '/3/person/2']),
+    (5.0, ['/3/person/1']),
+    (5.1, ['/3/person/1']),
+])
+async def test_shutdown_drains_gated_work_only_before_deadline(
+    monkeypatch: pytest.MonkeyPatch, release_after: float, requests: list[str],
+) -> None:
     env = runtime(monkeypatch)
     container = env.container
     hydrator = container.filmography_hydrator
+    draining = asyncio.Event()
+    original_drain = hydrator.drain
+
+    async def tracked_drain() -> None:
+        draining.set()
+        await original_drain()
+
+    loop = asyncio.get_running_loop()
+    original_time = loop.time
+    elapsed = 0.0
+    monkeypatch.setattr(loop, 'time', lambda: original_time() + elapsed)
     await container.startup()
     try:
         await container.services.follow_person.execute(FIRST, GUEST)
         await asyncio.wait_for(hydrator.drain(), 1)
         assert hydrator.enqueue(SECOND, GUEST)
-        closing = asyncio.create_task(container.close())
-        await asyncio.sleep(0)
-        await asyncio.sleep(0)
-        assert not hydrator.enqueue(PersonIdentity(CatalogProvider.TMDB, 3), GUEST)
+        await asyncio.sleep(0)  # Let the second job park at the rate gate.
+        assert env.store.reads == [FIRST, SECOND]
         assert env.requests == ['/3/person/1']
+        monkeypatch.setattr(hydrator, 'drain', tracked_drain)
+        closing = asyncio.create_task(container.close())
+        await asyncio.wait_for(draining.wait(), 1)
+        assert not hydrator.enqueue(PersonIdentity(CatalogProvider.TMDB, 3), GUEST)
         assert not closing.done() and not container.client.is_closed
         container.admission.check_ready()
+
+        # Wake dispatch in the same turn that the shutdown deadline becomes due.
+        elapsed = release_after
         await env.clock.advance(1)
         await asyncio.wait_for(closing, 1)
-        assert env.requests == ['/3/person/1', '/3/person/2']
-        assert set(env.store.stored) == {FIRST, SECOND}
-        assert env.access.counts[TOTAL] == 2
+
+        assert env.requests == requests
+        assert env.access.counts[TOTAL] == len(requests)
+        assert set(env.store.stored) == ({FIRST, SECOND} if len(requests) == 2 else {FIRST})
     finally:
         await container.close()
     assert [probe.await_count for probe in env.dispose] == [1, 1, 1]
