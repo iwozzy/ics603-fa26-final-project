@@ -172,6 +172,8 @@ Drop entries with absent, blank, or invalid release dates before both movie and 
 
 Deduplicate movie rows by provider movie ID, deterministically retaining the first normalized occurrence (cast before crew). Deduplicate repeated identical credit IDs; conflicting identities for one credit ID fail the hydration. Distinct credit IDs for one movie/person remain distinct. Sort writes by provider IDs to keep lock acquisition consistent across concurrent people.
 
+Deduplication applies separately to the two target tables; never deduplicate the combined credit array by movie ID. If one movie appears in both cast and crew, persist one movie and both credits, each with its own provider credit ID and `credit_type`. For example, an acting credit and a directing credit for the same person/movie share the local `movie_id` and `person_id` but remain separate credit rows. The timeline still returns that movie once.
+
 One transaction, **one statement per table upserted**:
 
 1. Upsert `people` by `tmdb_id`, including `name`, `known_for_department`, and `tmdb_last_movies_hydration = transaction time`. Preserve existing `known_for` and profile path on conflict; when inserting a previously missing person, use the existing empty known-for default and nullable profile path.
@@ -198,7 +200,7 @@ Parameters:
 | --- | --- |
 | `limit` | Integer 1–100; default 20. Out-of-range values fail validation. |
 | `cursor`, `direction` | Both required for paging; direction is `older` or `newer`. |
-| `anchor_date`, `anchor_id` | Both required for anchored refresh; date is ISO `YYYY-MM-DD`, ID is a positive bigint decimal string. |
+| `anchor_date`, `anchor_id` | Both required for anchored refresh; date is ISO `YYYY-MM-DD`, ID is a positive JavaScript-safe integer. Query parameters are text on the wire and validated as these types by the backend. |
 
 Exactly one mode: no cursor/anchor/direction (initial); cursor plus direction (paging); or complete anchor pair (refresh). Reject combinations, incomplete pairs, and unknown parameters. Future date-only ruler anchoring is deferred.
 
@@ -208,7 +210,7 @@ Response example (tokens shown schematically):
 {
   "items": [
     {
-      "id": "123",
+      "id": 123,
       "title": "Bullet Train",
       "overview": "Movie overview",
       "poster_image_url": "https://image.tmdb.org/t/p/w500/example.jpg",
@@ -222,7 +224,11 @@ Response example (tokens shown schematically):
 }
 ```
 
-`id` is an app-owned movie ID serialized as a decimal string to preserve all PostgreSQL bigint values in JavaScript. `overview` and `poster_image_url` are nullable. `as_of` is the UTC database date read once for this request; the initial request and each anchored refresh establish the client's boundary. `anchor_index` is null except on anchored refresh when an at-or-older item exists. All returned items use display order `(release_date DESC, id DESC)`.
+`id` is an app-owned movie ID serialized as a JSON integer and represented as a JavaScript number. The owner selected numeric IDs on the expectation that app-generated sequential IDs will remain JavaScript-safe. PostgreSQL bigint alone does not guarantee that property: require positive safe integers (`1..9007199254740991`) at the API and client validation boundaries to prevent silent rounding if that expectation ever fails. Keep the requested bigint identity column. `overview` and `poster_image_url` are nullable. `anchor_index` is null except on anchored refresh when an at-or-older item exists. All returned items use display order `(release_date DESC, id DESC)`.
+
+`as_of` is the UTC calendar date establishing the current window's present boundary. Return it on initial and anchored responses; return null on cursor-paging responses, which do not establish a new boundary. On initial load, movies dated at or before `as_of` form the past side and those dated after it form the future side. The initial future-boundary cursor carries this same date. An anchored refresh establishes a new boundary date but centers the result on the saved movie, not on that date.
+
+Obtain `as_of` within the same SQL statement that fetches the window, for example with a parameter CTE selecting `(CURRENT_TIMESTAMP AT TIME ZONE 'UTC')::date`. Reuse that value for the initial predicates, availability probes, cursor construction, and returned metadata, including when no movies match. There is no separate clock query or database round trip. It is boundary metadata, not a snapshot timestamp or a freshness guarantee: later cursor requests continue from encoded sort keys, even after midnight, and do not use a new server date to move the boundary. No visible Now divider is introduced in F003.
 
 The backend constructs poster URLs from the validated stored path and `https://image.tmdb.org/t/p/w500/`, with exactly one slash at the join. The frontend sees only the application's URL field and never constructs vendor URLs.
 
@@ -240,13 +246,13 @@ Start from `movies` and use an `EXISTS` condition joining `credits` to `follows`
 
 Anchored refresh returns up to `2 * limit` items, deliberately one page per side. `anchor_index` is the number of newer-side items when the older side is nonempty; otherwise null. If the anchor movie disappeared, this naturally identifies the nearest surviving at-or-older movie by sort key. The anchor is values, so deleting its original row is harmless.
 
-Derive directional availability from the extra row in the scanned direction and a cheap `EXISTS` probe for any unscanned opposite side. Prefer one SQL statement/CTE snapshot per response, including initial `today` and availability probes. Null cursors mean no matching rows were available beyond that edge at query time. There are no count queries or long-lived snapshots across requests.
+Derive directional availability from the extra row in the scanned direction and a cheap `EXISTS` probe for any unscanned opposite side. Use one SQL statement/CTE snapshot per response, including initial/anchored `as_of` and availability probes. Null cursors mean no matching rows were available beyond that edge at query time. There are no separate clock queries, count queries, or long-lived snapshots across requests.
 
 On the initial response, return a special future-boundary cursor when future movies exist, even if the past page is empty. Other nonempty pages carry row cursors from their first/last returned items only when more matching rows exist beyond that edge. The client takes only the newest cursor of its first page and oldest cursor of its last page. A paging response emptied by concurrent changes marks the requested direction exhausted without discarding existing pages or overwriting their opposite edge.
 
 ### Cursor handling and changing data
 
-Design call: versioned base64url JSON containing kind (`row` or initial `future_boundary`), date, decimal-string ID for row cursors, and a scope fingerprint for the resolved profile and this query version. Limit encoded input size (1 KiB), decoded shape, exact fields, version, canonical dates, and IDs to PostgreSQL's positive bigint range. The initial boundary kind is accepted only with `newer`. Treat tokens as opaque in the client; do not parse their dates through JavaScript `Date`.
+Design call: versioned base64url JSON containing kind (`row` or initial `future_boundary`), date, integer ID for row cursors, and a scope fingerprint for the resolved profile and this query version. Limit encoded input size (1 KiB), decoded shape, exact fields, version, canonical dates, and IDs to the positive JavaScript-safe integer range. The initial boundary kind is accepted only with `newer`. Treat tokens as opaque in the client; do not parse their dates through JavaScript `Date`.
 
 Scope fingerprints catch accidental cross-guest reuse; unsigned tokens provide no authenticity guarantee. They are safe navigation input because the server independently supplies authenticated profile scope to every query. A forged token never broadens eligibility. Signing can be added independently later if authenticity becomes a requirement.
 
@@ -258,7 +264,7 @@ Provider updates can move a release date or insert movies inside an already load
 
 Add a pure TypeScript `TimelineStore`, timeline read use case and repository interface. Compose the HTTP adapter with the existing guest-session repository. Validate generated DTOs with Zod and map into domain values; generated API imports remain confined to outbound API adapters. UI contexts/providers and hooks subscribe to the store above routes, as Following does.
 
-Keep pages, edge cursors, established `as_of`, request state, and the visible `(release_date, id, pixel offset)` in app memory. Preserve movie IDs as strings and dates as ISO calendar-date strings. Layout measurements, user gestures, and scrolling live in inbound UI adapters, which pass plain anchor values to the store. Do not persist in local/async storage. New guest creation clears cached data/anchor, aborts old requests, and rejects obsolete responses using existing guest identity-generation events. A full app reload starts at the present.
+Keep pages, edge cursors, established `as_of`, request state, and the visible `(release_date, id, pixel offset)` in app memory. Preserve movie IDs as JavaScript-safe numbers and dates as ISO calendar-date strings. Cursor-paging responses leave the established `as_of` unchanged; initial and successful anchored responses replace it. Layout measurements, user gestures, and scrolling live in inbound UI adapters, which pass plain anchor values to the store. Do not persist in local/async storage. New guest creation clears cached data/anchor, aborts old requests, and rejects obsolete responses using existing guest identity-generation events. A full app reload starts at the present.
 
 At most one request per direction is active. Paging may run concurrently in opposite directions; refresh supersedes both. Tag requests with guest generation, route-entry/window revision, and edge cursor so late responses cannot append to a replaced window. Stop hidden-route paging and abort obsolete reads on departure without discarding cached pages or the saved anchor. Background hydration remains independent.
 
@@ -307,7 +313,7 @@ No product tests run for this design-only change. The implementation plan must c
 
 - **Migration/persistence:** identity generation, unique/FK/check constraints, preservation of existing people/follows, reversible migration, nullable optional fields, multi-role cast/crew credits, duplicate IDs, provider/local-ID mapping, all-or-nothing commit, empty filmography, rollback freshness, and database-only retry without another provider call.
 - **Hydration:** nonblocking enqueue before unsuccessful/slow follow commits, missing-person behavior, validation exclusions, 24-hour edge, coalescing/first-owner attribution, bounds and saturation, rolling rate/in-flight limits, retry charging, shared accounting exhaustion, freshness skip without charge, response size/identity validation, malformed records, shared `429` cooldown with integer/date/malformed/shorter/longer headers, extension by multiple in-flight responses, cooldown release without a burst, cancellation, and shutdown ordering.
-- **API/query:** ownership isolation, no provider calls, distinct movies across overlapping follows and roles, same-day ID ties, date/today boundaries, both scan directions, future-only/past-only/empty catalogs, edge exhaustion, deleted cursor/anchor rows, disappeared anchor neighborhood, bigint strings, strict request/cursor validation, no-store/empty failures, and representative query plans on real PostgreSQL.
+- **API/query:** ownership isolation, no provider calls, distinct movies across overlapping follows and roles, same-day ID ties, date/today boundaries, both scan directions, future-only/past-only/empty catalogs, edge exhaustion, deleted cursor/anchor rows, disappeared anchor neighborhood, numeric IDs and safe-integer limits, strict request/cursor validation, initial/anchored `as_of` without a separate clock query, null paging `as_of` with a stable client boundary across midnight, no-store/empty failures, and representative query plans on real PostgreSQL.
 - **Client:** DTO validation and mapping, store merge/dedup, request race protection, guest reset, bounded anchored return refresh, failure retention, empty-window reentry, departure without cache loss, no hydration polling/mutation refresh, and correct date rendering.
 - **Browser acceptance:** wireframe row/sidebar behavior, direct/history navigation, no eager future request on first paint, mouse/trackpad/keyboard/touch access to future rows from the top and from an empty past side, stable variable-height prepend, poster loading, repeated route return at the same movie/offset, anchor disappearance after unfollow, moving during refresh, and reload at the present. Stub provider traffic; never call the live provider in the ordinary suite.
 - **Repository checks:** existing unit/integration/E2E suites appropriate to affected areas, framework-boundary lint/import checks, type checks, deterministic OpenAPI regeneration and generated-client compatibility.
@@ -316,4 +322,4 @@ No product tests run for this design-only change. The implementation plan must c
 
 The builder may choose exact file/module names, small port decomposition, bounded helper structures, telemetry event names, CTE construction, and UI measurement mechanics while preserving the specified behavior and layer rules. Sanitized outcomes/counts/latencies are sufficient for telemetry; avoid raw provider bodies, guest identities, and request input.
 
-The following are proposed design calls, not decisions attributed to the owner: UTC today; nullable poster path and untouched movie-complete-credit timestamp; best-effort queue/retry/timeout/size defaults; shared accounting minute limits and first-requester attribution; upsert-only catalog reconciliation; unsigned validated cursors; string movie IDs; empty `500` failures; month/year display; no visible Now divider; and data retention without page eviction. Owner approval of this document settles these calls for F003.
+The following are proposed design calls, not decisions attributed to the owner: UTC today; nullable poster path and untouched movie-complete-credit timestamp; best-effort queue/retry/timeout/size defaults; shared accounting minute limits and first-requester attribution; upsert-only catalog reconciliation; unsigned validated cursors; empty `500` failures; month/year display; no visible Now divider; and data retention without page eviction. The owner selected numeric movie IDs during draft review on 2026-11-26; safe-integer validation and the explicit initial/anchored-only `as_of` contract are clarifications for review. Owner approval of this document settles the remaining calls for F003.
