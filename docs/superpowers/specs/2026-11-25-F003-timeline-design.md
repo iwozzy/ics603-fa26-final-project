@@ -2,13 +2,13 @@
 
 Date: 2026-11-25
 
-Status: Draft — awaiting project-owner approval. Implementation planning follows approval.
+Status: Approved by the project owner on 2026-11-26, including the numeric-ID and `as_of` clarifications. Implementation planning follows this approval.
 
 ## Intent and scope
 
 Help a guest discover movies through people they follow by scrolling one combined, distinct, newest-first filmography. Start at the present; scrolling upward explores upcoming movies and scrolling downward explores released movies. Preserve the reading position across navigation within the loaded application.
 
-This is a full feature spanning catalog storage, asynchronous hydration, an authenticated timeline query, and the universal client. Keep the existing ports-and-adapters architecture, existing responsibilities, and OpenAPI contract workflow. No product implementation is authorized by this draft.
+This is a full feature spanning catalog storage, asynchronous hydration, an authenticated timeline query, and the universal client. Keep the existing ports-and-adapters architecture, existing responsibilities, and OpenAPI contract workflow. This document approves the design; implementation follows a separately reviewed implementation plan.
 
 Inputs:
 
@@ -121,7 +121,7 @@ Consequences are intentional: a valid request can hydrate even if storage later 
 
 Use application queue/orchestration code analogous to PeopleWriter, a provider-neutral filmography gateway port, a hydration unit-of-work port, and a PostgreSQL adapter. Vendor DTO validation, response limits, `Retry-After` parsing, and mapping stay in the TMDB adapter. HTTP/SQLAlchemy/Pydantic types do not cross into the core. Add a named `movie_hydration` pool with **5 connections plus 5 overflow**, through the existing pool registry. Reads and writes for hydration use this pool; timeline reads use `application`.
 
-Design defaults, subject to owner review:
+Approved design defaults:
 
 - At most 1,024 outstanding distinct people, including queued, active, delayed, and persistence-retry work. Queue entries are data; do not create an unbounded task per request.
 - Coalesce queued/running work by provider/person identity; retain the first accepted requester's guest/IP context for charging. Later requests neither duplicate provider calls nor change the charge owner.
@@ -322,4 +322,4 @@ No product tests run for this design-only change. The implementation plan must c
 
 The builder may choose exact file/module names, small port decomposition, bounded helper structures, telemetry event names, CTE construction, and UI measurement mechanics while preserving the specified behavior and layer rules. Sanitized outcomes/counts/latencies are sufficient for telemetry; avoid raw provider bodies, guest identities, and request input.
 
-The following are proposed design calls, not decisions attributed to the owner: UTC today; nullable poster path and untouched movie-complete-credit timestamp; best-effort queue/retry/timeout/size defaults; shared accounting minute limits and first-requester attribution; upsert-only catalog reconciliation; unsigned validated cursors; empty `500` failures; month/year display; no visible Now divider; and data retention without page eviction. The owner selected numeric movie IDs during draft review on 2026-11-26; safe-integer validation and the explicit initial/anchored-only `as_of` contract are clarifications for review. Owner approval of this document settles the remaining calls for F003.
+The following calls were proposed by the author and accepted with design approval on 2026-11-26: UTC today; nullable poster path and untouched movie-complete-credit timestamp; best-effort queue/retry/timeout/size defaults; shared accounting minute limits and first-requester attribution; upsert-only catalog reconciliation; unsigned validated cursors; empty `500` failures; month/year display; no visible Now divider; and data retention without page eviction. The owner selected numeric movie IDs during draft review on 2026-11-26 and approved safe-integer validation and the explicit initial/anchored-only `as_of` contract with this document.
