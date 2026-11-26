@@ -17,6 +17,9 @@ from lumiere.adapters.outbound.persistence.following_unit_of_work import (
 from lumiere.adapters.outbound.persistence.people_unit_of_work import (
     PostgresPeopleUnitOfWork,
 )
+from lumiere.adapters.outbound.persistence.timeline_unit_of_work import (
+    PostgresTimelineUnitOfWork,
+)
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 
 TEST_DATABASE_URL = "postgresql+psycopg://lumiere_test@127.0.0.1:15432/lumiere_test"
@@ -60,3 +63,8 @@ def following_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[],
 @pytest.fixture
 def filmography_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresFilmographyUnitOfWork]:
     return lambda: PostgresFilmographyUnitOfWork(uows().factory)
+
+
+@pytest.fixture
+def timeline_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresTimelineUnitOfWork]:
+    return lambda: PostgresTimelineUnitOfWork(uows().factory)
