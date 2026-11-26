@@ -16,6 +16,17 @@ export const zFollowPersonRequest = z.object({
 });
 
 /**
+ * MovieSummaryResponse
+ */
+export const zMovieSummaryResponse = z.object({
+    id: z.int().gte(1).lte(9007199254740991),
+    overview: z.string().nullable(),
+    poster_image_url: z.string().nullable(),
+    release_date: z.iso.date(),
+    title: z.string()
+});
+
+/**
  * PersonResponse
  */
 export const zPersonResponse = z.object({
@@ -41,6 +52,19 @@ export const zFollowingResponse = z.object({
 export const zSearchPeopleResponse = z.object({
     people: z.array(zPersonResponse).max(7),
     query: z.string().min(1).max(200)
+});
+
+export const zTimelineDirection = z.enum(['older', 'newer']);
+
+/**
+ * TimelineResponse
+ */
+export const zTimelineResponse = z.object({
+    anchor_index: z.int().nullable(),
+    as_of: z.iso.date().nullable(),
+    items: z.array(zMovieSummaryResponse),
+    newer_cursor: z.string().nullable(),
+    older_cursor: z.string().nullable()
 });
 
 /**

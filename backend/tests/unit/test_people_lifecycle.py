@@ -24,6 +24,7 @@ from tests.fakes.following import MemoryFollowing
 from tests.fakes.hydration import controlled_hydrator
 from tests.fakes.people import ControlledPeoplePersistence
 from tests.fakes.search import FakeCatalog, FakeClock, sample_person
+from tests.fakes.timeline import UnexpectedTimeline
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 
@@ -45,7 +46,15 @@ def container_for(access: ControlledAccess, people: ControlledPeoplePersistence)
     writer = PeopleWriter(people, shutdown_timeout=.03)
     pools = PoolsProbe(access, people)
     hydration = controlled_hydrator(admission)
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), writer), GuestIdentityService(access, POLICY), b'synthetic-test-key', list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing(), hydration), unfollow_person=UnfollowPerson(MemoryFollowing()))
+    services = HttpServices(
+        SearchPeople(FakeCatalog(), admission, FakeClock(), writer),
+        GuestIdentityService(access, POLICY),
+        b'synthetic-test-key',
+        list_following=ListFollowing(MemoryFollowing()),
+        follow_person=FollowPerson(MemoryFollowing(), hydration),
+        unfollow_person=UnfollowPerson(MemoryFollowing()),
+        list_timeline=UnexpectedTimeline(),
+    )
     return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, pools), admission, writer, hydration), pools
 
 
@@ -145,6 +154,7 @@ async def test_runtime_assigns_distinct_named_factories_and_instruments_all(monk
         assert container.services.follow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.services.list_following.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.services.unfollow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
+        assert container.services.list_timeline.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.admission.uow_factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.people_writer.uow_factory().factory is people.sessions  # type: ignore[attr-defined]
         assert container.filmography_hydrator.hydrate.factory().factory is hydration.sessions  # type: ignore[attr-defined]

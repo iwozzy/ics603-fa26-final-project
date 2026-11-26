@@ -15,13 +15,21 @@ from lumiere.application.use_cases.following import (
 )
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
-from lumiere.domain.access import UsagePolicy
-from lumiere.domain.errors import SearchFailed
+from lumiere.domain.access import GuestContext, UsagePolicy
+from lumiere.domain.errors import SearchFailed, TimelineFailed
+from lumiere.domain.timeline import TimelinePage, TimelineRequest
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
 from tests.fakes.following import MemoryFollowing
 from tests.fakes.hydration import RecordingFilmographyQueue
 from tests.fakes.search import FakeAdmission, FakeClock, FakePeopleQueue
+
+
+class RejectedTimeline:
+    async def execute(self, request: TimelineRequest, context: GuestContext) -> TimelinePage:
+        if request.cursor == 'SENTINEL_CURSOR':
+            raise TimelineFailed('invalid_cursor')
+        raise TimelineFailed('SENTINEL_EXCEPTION')
 
 
 async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -35,7 +43,7 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     async with httpx.AsyncClient(base_url="https://provider.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "SENTINEL_PAYLOAD"}, {"id": False, "name": "invalid"}]}))) as provider:
         catalog = TMDBPeopleCatalog(provider, report=telemetry.record_catalog_counts)
         policy = UsagePolicy(100,100,100,100,100,100,100,100,100,100)
-        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing(), RecordingFilmographyQueue()), unfollow_person=UnfollowPerson(MemoryFollowing()))
+        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing(), RecordingFilmographyQueue()), unfollow_person=UnfollowPerson(MemoryFollowing()), list_timeline=RejectedTimeline())
         app = create_app(telemetry.observe_services(services))
         telemetry.instrument_http(app)
         async with httpx.AsyncClient(base_url="https://app.test", transport=httpx.ASGITransport(app=app)) as client:
@@ -44,9 +52,11 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
             assert response.status_code == 200
             admission.error = SearchFailed("quota")
             assert (await client.get("/api/v1/people/search?query=SENTINEL_QUERY")).status_code == 500
+            for query in ('?cursor=SENTINEL_CURSOR&direction=older', '', '?SENTINEL_QUERY=1'):
+                assert (await client.get(f'/api/v1/timeline{query}')).status_code == 500
     spans = exporter.get_finished_spans()
     serialized = json.dumps([dict(span.attributes or {}) for span in spans])
-    for sentinel in ("SENTINEL_QUERY", "SENTINEL_PAYLOAD", "SENTINEL_AUTH", "SENTINEL_CORRELATION"):
+    for sentinel in ("SENTINEL_QUERY", "SENTINEL_PAYLOAD", "SENTINEL_AUTH", "SENTINEL_CORRELATION", "SENTINEL_CURSOR", "SENTINEL_EXCEPTION"):
         assert sentinel not in serialized
     attributes = [dict(span.attributes or {}) for span in spans]
     assert any(item.get("selected_count") == 1 for item in attributes)
@@ -56,6 +66,11 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     assert all(span.end_time is not None and span.start_time is not None and span.end_time >= span.start_time for span in spans)
     trace_ids = [span.context.trace_id for span in spans if span.context is not None and span.name in ("http.search", "people.search")]
     assert len(trace_ids) >= 4 and len(set(trace_ids)) < len(trace_ids)
+    for name, expected in (
+        ('http.timeline.list', ['invalid_cursor', 'internal', 'invalid_request']),
+        ('timeline.list', ['invalid_cursor', 'internal']),
+    ):
+        assert [(span.attributes or {}).get('failure_category') for span in spans if span.name == name] == expected
     telemetry.configure_observability(False)
 
 

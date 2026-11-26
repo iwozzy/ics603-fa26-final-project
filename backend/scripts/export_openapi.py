@@ -11,11 +11,18 @@ from lumiere.application.ports.following import (
 )
 from lumiere.application.ports.guests import GuestIdentities
 from lumiere.application.ports.search import PeopleSearch
+from lumiere.application.ports.timeline import ListTimelinePort
 from lumiere.main import create_app
 
 
 def export() -> None:
-    services = HttpServices(cast(PeopleSearch, None), cast(GuestIdentities, None), b"", list_following=cast(ListFollowingPort, None), follow_person=cast(FollowPersonPort, None), unfollow_person=cast(UnfollowPersonPort, None))
+    services = HttpServices(
+        cast(PeopleSearch, None), cast(GuestIdentities, None), b"",
+        list_following=cast(ListFollowingPort, None),
+        follow_person=cast(FollowPersonPort, None),
+        unfollow_person=cast(UnfollowPersonPort, None),
+        list_timeline=cast(ListTimelinePort, None),
+    )
     document = create_app(services).openapi()
     path = Path(__file__).resolve().parents[2] / "openapi.json"
     path.write_text(json.dumps(document, indent=2, sort_keys=True) + "\n")

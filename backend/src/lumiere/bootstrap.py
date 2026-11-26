@@ -6,6 +6,7 @@ import httpx
 from sqlalchemy import text
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.adapters.inbound.http.timeline_cursor import Base64TimelineCursorCodec
 from lumiere.adapters.outbound.clients.tmdb_filmography.client import (
     TMDBFilmographyCatalog,
 )
@@ -20,6 +21,9 @@ from lumiere.adapters.outbound.persistence.people_unit_of_work import (
     PostgresPeopleUnitOfWork,
 )
 from lumiere.adapters.outbound.persistence.pools import PoolRegistry
+from lumiere.adapters.outbound.persistence.timeline_unit_of_work import (
+    PostgresTimelineUnitOfWork,
+)
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 from lumiere.application.filmography_hydrator import FilmographyHydrator
 from lumiere.application.people_writer import PeopleWriter
@@ -30,6 +34,7 @@ from lumiere.application.use_cases.following import (
     UnfollowPerson,
 )
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
+from lumiere.application.use_cases.list_timeline import ListTimeline
 from lumiere.application.use_cases.search_people import SearchPeople
 from lumiere.application.use_cases.usage_admission import UsageAdmissionService
 from lumiere.config import Settings
@@ -124,6 +129,9 @@ def build_container(settings: Settings) -> AppContainer:
     def following_uows() -> PostgresFollowingUnitOfWork:
         return PostgresFollowingUnitOfWork(application.sessions)
 
+    def timeline_uows() -> PostgresTimelineUnitOfWork:
+        return PostgresTimelineUnitOfWork(application.sessions)
+
     def filmography_uows() -> PostgresFilmographyUnitOfWork:
         return PostgresFilmographyUnitOfWork(hydration_pool.sessions)
 
@@ -149,5 +157,6 @@ def build_container(settings: Settings) -> AppContainer:
         list_following=ListFollowing(following_uows),
         follow_person=FollowPerson(following_uows, hydrator),
         unfollow_person=UnfollowPerson(following_uows),
+        list_timeline=ListTimeline(timeline_uows, Base64TimelineCursorCodec()),
     )
     return AppContainer(observe_services(services), client, pools, admission, people_writer, hydrator)

@@ -3,7 +3,18 @@ from typing import Self
 from uuid import UUID
 
 from lumiere.application.ports.timeline import TimelineRepository
-from lumiere.domain.timeline import TimelineSelection, TimelineWindow
+from lumiere.domain.access import GuestContext
+from lumiere.domain.timeline import (
+    TimelinePage,
+    TimelineRequest,
+    TimelineSelection,
+    TimelineWindow,
+)
+
+
+class UnexpectedTimeline:
+    async def execute(self, request: TimelineRequest, context: GuestContext) -> TimelinePage:
+        raise AssertionError('unexpected timeline request')
 
 
 class StubTimeline:

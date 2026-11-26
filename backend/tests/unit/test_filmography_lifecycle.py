@@ -34,6 +34,7 @@ from tests.fakes.following import MemoryFollowing
 from tests.fakes.hydration import ControlledFilmography, ControlledHydrationClock
 from tests.fakes.people import ControlledPeoplePersistence
 from tests.fakes.search import FakeCatalog, sample_person
+from tests.fakes.timeline import UnexpectedTimeline
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 TOTAL = CounterKey('global', 'all', 'people_provider', 'total')
@@ -103,6 +104,7 @@ def runtime(monkeypatch: pytest.MonkeyPatch, *, attempt_timeout: float = 5) -> R
         list_following=ListFollowing(following),
         follow_person=FollowPerson(following, hydrator),
         unfollow_person=UnfollowPerson(following),
+        list_timeline=UnexpectedTimeline(),
     )
     container = AppContainer(services, client, pools, admission, writer, hydrator)
     return Runtime(container, clock, store, access, requests, tuple(dispose.values()), following)

@@ -14,12 +14,14 @@ from lumiere.adapters.inbound.http.errors import (
 from lumiere.adapters.inbound.http.routers.v1.following import following_router
 from lumiere.adapters.inbound.http.routers.v1.guest_session import session_router
 from lumiere.adapters.inbound.http.routers.v1.people import people_router
+from lumiere.adapters.inbound.http.routers.v1.timeline import timeline_router
 
 
 def create_app(services: HttpServices) -> FastAPI:
     app = FastAPI(title="Lumiere", version="0.1.0", telemetry={"tracing": False, "metrics": False, "logs": False, "operation_spans": False, "auto_configure": False})
     app.include_router(people_router(services))
     app.include_router(following_router(services))
+    app.include_router(timeline_router(services))
     app.include_router(session_router(services))
     app.add_exception_handler(RequestValidationError, validation_failure)  # type: ignore[arg-type]
 
@@ -38,7 +40,11 @@ def create_app(services: HttpServices) -> FastAPI:
         return Response(headers={"Cache-Control": "no-store"})
 
     document = app.openapi()
-    for path, methods in (("/api/v1/people/search", ("get",)), ("/api/v1/following", ("get", "post", "delete"))):
+    for path, methods in (
+        ("/api/v1/people/search", ("get",)),
+        ("/api/v1/following", ("get", "post", "delete")),
+        ("/api/v1/timeline", ("get",)),
+    ):
         for method in methods:
             document["paths"][path][method]["responses"].pop("422", None)
     app.openapi_schema = document

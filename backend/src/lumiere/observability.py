@@ -17,6 +17,7 @@ from sqlalchemy.engine import ExceptionContext, ExecutionContext
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.adapters.inbound.http.errors import TIMELINE_FAILURE_CATEGORIES
 from lumiere.application.ports.filmography import FilmographyCatalog, HydrationEvent
 from lumiere.application.ports.following import (
     FollowPersonPort,
@@ -25,16 +26,23 @@ from lumiere.application.ports.following import (
 )
 from lumiere.application.ports.people import PeopleWriteEvent
 from lumiere.application.ports.search import PeopleSearch
+from lumiere.application.ports.timeline import ListTimelinePort
 from lumiere.application.use_cases.hydrate_filmography import HydrateFilmography
 from lumiere.domain.access import GuestContext
-from lumiere.domain.errors import FollowingFailed, HydrationFailed, SearchFailed
+from lumiere.domain.errors import (
+    FollowingFailed,
+    HydrationFailed,
+    SearchFailed,
+    TimelineFailed,
+)
 from lumiere.domain.filmography import PersonFilmography
 from lumiere.domain.following import FollowingSnapshot, PersonIdentity
 from lumiere.domain.people import SearchPeopleResult
+from lumiere.domain.timeline import TimelinePage, TimelineRequest
 
 _enabled = False
 _ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text", "event_kind", "outstanding", "in_flight", "attempt", "duration_ms"}
-_CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled", "missing_person", "follow_limit", "invalid_identity", "origin"}
+_CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled", "missing_person", "follow_limit", "invalid_identity", "origin"} | TIMELINE_FAILURE_CATEGORIES
 
 _HYDRATION_PROVIDER_CATEGORIES = {
     "provider_status", "provider_transport", "provider_throttled", "provider_response",
@@ -108,7 +116,14 @@ class ObservedSearch:
 
 
 def observe_services(services: HttpServices) -> HttpServices:
-    return replace(services, search_people=ObservedSearch(services.search_people), list_following=ObservedListFollowing(services.list_following), follow_person=ObservedFollowPerson(services.follow_person), unfollow_person=ObservedUnfollowPerson(services.unfollow_person))
+    return replace(
+        services,
+        search_people=ObservedSearch(services.search_people),
+        list_following=ObservedListFollowing(services.list_following),
+        follow_person=ObservedFollowPerson(services.follow_person),
+        unfollow_person=ObservedUnfollowPerson(services.unfollow_person),
+        list_timeline=ObservedListTimeline(services.list_timeline),
+    )
 
 
 class HttpTelemetry:
@@ -119,7 +134,11 @@ class HttpTelemetry:
         if scope["type"] != "http":
             await self.app(scope, receive, send)
             return
-        name = {"/api/v1/people/search": "http.search", "/api/v1/guest-session": "http.bootstrap"}.get(scope["path"], "http.other")
+        name = {
+            "/api/v1/people/search": "http.search",
+            "/api/v1/guest-session": "http.bootstrap",
+            "/api/v1/timeline": "http.timeline.list",
+        }.get(scope["path"], "http.other")
         if scope["path"] == "/api/v1/following":
             name = {"GET": "http.following.list", "POST": "http.following.follow", "DELETE": "http.following.unfollow"}.get(scope["method"], "http.other")
         with safe_span(name) as attributes:
@@ -187,6 +206,22 @@ def instrument_database(engine: Engine) -> None:
 def record_people_write(event: PeopleWriteEvent) -> None:
     with safe_span("people.persistence") as attributes:
         attributes.update(event_kind=event.kind, outstanding=event.outstanding, in_flight=event.in_flight, attempt=event.attempt, duration_ms=event.duration_ms)
+
+
+class ObservedListTimeline:
+    def __init__(self, inner: ListTimelinePort) -> None:
+        self.inner = inner
+
+    async def execute(self, request: TimelineRequest, context: GuestContext) -> TimelinePage:
+        with safe_span('timeline.list') as attributes:
+            try:
+                return await self.inner.execute(request, context)
+            except TimelineFailed as error:
+                attributes['failure_category'] = error.category if error.category in TIMELINE_FAILURE_CATEGORIES else 'internal'
+                raise
+            except TimeoutError:
+                attributes['failure_category'] = 'deadline'
+                raise
 
 
 class ObservedListFollowing:

@@ -9,7 +9,9 @@ from fastapi.exceptions import RequestValidationError
 from starlette.exceptions import HTTPException
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
-from lumiere.domain.errors import FollowingFailed, SearchFailed
+from lumiere.domain.errors import FollowingFailed, SearchFailed, TimelineFailed
+
+TIMELINE_FAILURE_CATEGORIES = {'invalid_request', 'invalid_cursor', 'invalid_movie_id', 'storage'}
 
 
 def failure_response() -> Response:
@@ -19,6 +21,9 @@ def failure_response() -> Response:
 async def validation_failure(request: Request, exc: RequestValidationError) -> Response:
     if request.url.path == "/api/v1/following":
         request.state.failure_category = "invalid_identity"
+        return failure_response()
+    if request.url.path == "/api/v1/timeline":
+        request.state.failure_category = "invalid_request"
         return failure_response()
     if request.url.path == "/api/v1/people/search":
         return failure_response()
@@ -34,6 +39,8 @@ async def http_failure(request: Request, exc: HTTPException) -> Response:
 
 
 def _failure_category(error: Exception) -> str:
+    if isinstance(error, TimelineFailed):
+        return error.category if error.category in TIMELINE_FAILURE_CATEGORIES else 'internal'
     if isinstance(error, (SearchFailed, FollowingFailed)):
         return error.category
     return "deadline" if isinstance(error, TimeoutError) else "internal"

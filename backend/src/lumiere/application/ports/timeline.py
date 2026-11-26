@@ -2,7 +2,18 @@ from types import TracebackType
 from typing import Protocol, Self
 from uuid import UUID
 
-from lumiere.domain.timeline import TimelineCursor, TimelineSelection, TimelineWindow
+from lumiere.domain.access import GuestContext
+from lumiere.domain.timeline import (
+    TimelineCursor,
+    TimelinePage,
+    TimelineRequest,
+    TimelineSelection,
+    TimelineWindow,
+)
+
+
+class ListTimelinePort(Protocol):
+    async def execute(self, request: TimelineRequest, context: GuestContext) -> TimelinePage: ...
 
 
 class TimelineRepository(Protocol):
