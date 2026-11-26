@@ -1,3 +1,4 @@
+from lumiere.application.ports.filmography import FilmographyQueue
 from lumiere.application.ports.following import FollowingUnitOfWorkFactory
 from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import FollowingFailed
@@ -8,14 +9,19 @@ GUEST_FOLLOW_LIMIT = 3
 
 
 class FollowPerson:
-    def __init__(self, factory: FollowingUnitOfWorkFactory) -> None:
+    def __init__(self, factory: FollowingUnitOfWorkFactory, hydration: FilmographyQueue) -> None:
         self.factory = factory
+        self.hydration = hydration
 
     async def execute(self, identity: PersonIdentity, context: GuestContext) -> FollowingSnapshot:
         if (identity.provider != CatalogProvider.TMDB
                 or type(identity.provider_id) is not int
                 or not 1 <= identity.provider_id <= MAX_PROVIDER_ID):
             raise FollowingFailed('invalid_identity')
+        try:
+            self.hydration.enqueue(identity, context)
+        except Exception:  # noqa: BLE001, S110 — hydration is independent of following
+            pass
         async with self.factory() as uow:
             if not await uow.follows.lock_profile(context.profile_id):
                 raise FollowingFailed('session')

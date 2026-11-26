@@ -17,6 +17,7 @@ from lumiere.domain.access import UsagePolicy
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
 from tests.fakes.following import MemoryFollowing
+from tests.fakes.hydration import RecordingFilmographyQueue
 from tests.fakes.search import (
     FakeAdmission,
     FakeCatalog,
@@ -43,7 +44,7 @@ async def api() -> AsyncIterator[Api]:
     access = MemoryAccess()
     following = MemoryFollowing()
     sessions = GuestIdentityService(access, UsagePolicy(100,100,100,100,100,100,100,100,100,100))
-    services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), sessions, b"synthetic-test-key", list_following=ListFollowing(following), follow_person=FollowPerson(following), unfollow_person=UnfollowPerson(following))
+    services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), sessions, b"synthetic-test-key", list_following=ListFollowing(following), follow_person=FollowPerson(following, RecordingFilmographyQueue()), unfollow_person=UnfollowPerson(following))
     app = create_app(services)
     async with LifespanManager(app), httpx.AsyncClient(transport=httpx.ASGITransport(app=app, raise_app_exceptions=False), base_url="https://app.test") as client:
         yield Api(client, catalog, admission, services, following, access)

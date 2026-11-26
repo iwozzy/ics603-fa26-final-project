@@ -17,6 +17,7 @@ from sqlalchemy.engine import ExceptionContext, ExecutionContext
 from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from lumiere.adapters.inbound.http.deps import HttpServices
+from lumiere.application.ports.filmography import FilmographyCatalog, HydrationEvent
 from lumiere.application.ports.following import (
     FollowPersonPort,
     ListFollowingPort,
@@ -24,14 +25,22 @@ from lumiere.application.ports.following import (
 )
 from lumiere.application.ports.people import PeopleWriteEvent
 from lumiere.application.ports.search import PeopleSearch
+from lumiere.application.use_cases.hydrate_filmography import HydrateFilmography
 from lumiere.domain.access import GuestContext
-from lumiere.domain.errors import FollowingFailed, SearchFailed
+from lumiere.domain.errors import FollowingFailed, HydrationFailed, SearchFailed
+from lumiere.domain.filmography import PersonFilmography
 from lumiere.domain.following import FollowingSnapshot, PersonIdentity
 from lumiere.domain.people import SearchPeopleResult
 
 _enabled = False
 _ALLOWED = {"selected_count", "invalid_count", "failure_category", "quota_outcome", "status_code", "correlation_id", "db.query.text", "event_kind", "outstanding", "in_flight", "attempt", "duration_ms"}
 _CATEGORIES = {"invalid_query", "quota", "bootstrap_quota", "session", "storage", "provider", "provider_response", "provider_oversize", "deadline", "cancelled", "missing_person", "follow_limit", "invalid_identity", "origin"}
+
+_HYDRATION_PROVIDER_CATEGORIES = {
+    "provider_status", "provider_transport", "provider_throttled", "provider_response",
+    "provider_oversize", "provider_identity_mismatch", "provider_credit_conflict",
+}
+_HYDRATION_EVENT_KINDS = {"accepted", "coalesced", "dropped", "started", "succeeded", "failed"}
 
 
 def _configure_export() -> bool:
@@ -225,4 +234,45 @@ class ObservedUnfollowPerson:
                 raise
             except TimeoutError:
                 attributes['failure_category'] = 'deadline'
+                raise
+
+
+def record_hydration(event: HydrationEvent) -> None:
+    with safe_span("filmography.queue") as attributes:
+        attributes.update(
+            event_kind=event.kind if event.kind in _HYDRATION_EVENT_KINDS else "internal",
+            outstanding=event.outstanding,
+            in_flight=event.in_flight,
+            attempt=event.attempt,
+            duration_ms=event.duration_ms,
+        )
+
+
+class ObservedFilmographyCatalog:
+    def __init__(self, inner: FilmographyCatalog) -> None:
+        self.inner = inner
+
+    async def fetch(self, identity: PersonIdentity) -> PersonFilmography:
+        with safe_span("filmography.provider") as attributes:
+            try:
+                return await self.inner.fetch(identity)
+            except HydrationFailed as error:
+                category = error.category
+                attributes["failure_category"] = category if category in _HYDRATION_PROVIDER_CATEGORIES else "internal"
+                raise
+
+
+class ObservedHydrateFilmography(HydrateFilmography):
+    @override
+    async def execute(self, identity: PersonIdentity, context: GuestContext) -> None:
+        with safe_span("filmography.hydrate") as attributes:
+            try:
+                await super().execute(identity, context)
+            except SearchFailed as error:
+                category = error.category if error.category in {"quota", "storage"} else "internal"
+                attributes.update(failure_category=category, quota_outcome="rejected" if category == "quota" else "failed")
+                raise
+            except HydrationFailed as error:
+                category = error.category
+                attributes["failure_category"] = category if category == "storage" or category in _HYDRATION_PROVIDER_CATEGORIES else "internal"
                 raise

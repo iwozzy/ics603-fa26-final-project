@@ -22,6 +22,7 @@ from lumiere.domain.errors import SearchFailed
 from tests.fakes.access import MemoryUow
 from tests.fakes.accounting import ControlledAccess
 from tests.fakes.following import MemoryFollowing
+from tests.fakes.hydration import controlled_hydrator
 from tests.fakes.people import ControlledPeoplePersistence
 from tests.fakes.search import FakeCatalog, FakeClock, FakePeopleQueue
 
@@ -42,8 +43,9 @@ class EngineProbe:
 
 
 def make_container(access: ControlledAccess, admission: UsageAdmissionService, probe: EngineProbe) -> AppContainer:
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(access, POLICY), b"synthetic-test-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()), unfollow_person=UnfollowPerson(MemoryFollowing()))
-    return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, probe), admission, PeopleWriter(ControlledPeoplePersistence()))
+    hydration = controlled_hydrator(admission)
+    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(access, POLICY), b"synthetic-test-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing(), hydration), unfollow_person=UnfollowPerson(MemoryFollowing()))
+    return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, probe), admission, PeopleWriter(ControlledPeoplePersistence()), hydration)
 
 
 async def test_container_hydrates_before_serving_and_drains_before_disposal() -> None:
