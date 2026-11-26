@@ -1,5 +1,6 @@
 import gzip
 import json
+import tracemalloc
 from collections.abc import AsyncIterator
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -26,6 +27,16 @@ IDENTITY = PersonIdentity(CatalogProvider.TMDB, 10297)
 class FixedClock:
     def now(self) -> datetime:
         return datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
+
+
+class ChunkedBody(httpx.AsyncByteStream):
+    def __init__(self, body: bytes) -> None:
+        self.data = body
+
+    @override
+    async def __aiter__(self) -> AsyncIterator[bytes]:
+        yield self.data[:15]
+        yield self.data[15:]
 
 
 def movie_credit(**overrides: object) -> dict[str, object]:
@@ -71,7 +82,7 @@ async def test_cast_and_crew_keep_separate_credit_ids() -> None:
 
     def respond(request: httpx.Request) -> httpx.Response:
         requests.append(request)
-        return httpx.Response(200, content=FIXTURE.read_bytes())
+        return httpx.Response(200, stream=ChunkedBody(FIXTURE.read_bytes()))
 
     async with httpx.AsyncClient(
         base_url="https://catalog.test", transport=httpx.MockTransport(respond)
@@ -84,6 +95,7 @@ async def test_cast_and_crew_keep_separate_credit_ids() -> None:
         requests[0].url
         == "https://catalog.test/3/person/10297?append_to_response=movie_credits"
     )
+    assert requests[0].headers["Accept-Encoding"] == "gzip, identity"
     assert payload.person.identity == IDENTITY
     assert payload.person.name == "Matthew McConaughey"
     assert payload.person.known_for_department == "Acting"
@@ -196,6 +208,7 @@ async def test_repeated_credits_keep_first_movie_metadata() -> None:
     payload = await fetch_json(
         filmography_response(
             cast=[
+                {**first, "release_date": "", "title": "Undated title"},
                 first,
                 first,
                 {
@@ -233,6 +246,16 @@ async def test_repeated_credits_keep_first_movie_metadata() -> None:
         ([movie_credit()], [movie_credit()]),
         ([movie_credit(character="Lead"), movie_credit(character="Cameo")], []),
         ([], [movie_credit(job="Director"), movie_credit(job="Producer")]),
+        ([movie_credit(), movie_credit(id=102, release_date=None)], []),
+        ([movie_credit(id=102, release_date="invalid"), movie_credit()], []),
+        ([movie_credit(release_date=None)], [movie_credit(release_date=None)]),
+        (
+            [],
+            [
+                movie_credit(job="Director"),
+                movie_credit(job="Producer", release_date=""),
+            ],
+        ),
     ],
 )
 async def test_reused_credit_id_with_incompatible_identity_is_terminal(
@@ -435,19 +458,9 @@ async def test_transport_failure_is_retryable_without_retrying(
     assert "synthetic transport failure" not in str(failure.value)
 
 
-class CompressedBody(httpx.AsyncByteStream):
-    def __init__(self, body: bytes) -> None:
-        self.data = gzip.compress(body)
-
-    @override
-    async def __aiter__(self) -> AsyncIterator[bytes]:
-        yield self.data[:15]
-        yield self.data[15:]
-
-
 async def test_response_bound_applies_to_decompressed_stream() -> None:
     body = json.dumps(filmography_response(ignored_padding="x" * 1000)).encode()
-    stream = CompressedBody(body)
+    stream = ChunkedBody(gzip.compress(body))
     assert len(stream.data) < 256 < len(body)
     with pytest.raises(HydrationFailed) as failure:
         await fetch_response(
@@ -455,4 +468,48 @@ async def test_response_bound_applies_to_decompressed_stream() -> None:
             max_bytes=256,
         )
     assert failure.value.category == "provider_oversize"
+    assert not failure.value.retryable
+
+
+async def test_gzip_allocation_is_bounded_during_decompression() -> None:
+    stream = ChunkedBody(gzip.compress(b"x" * (8 * 1024 * 1024)))
+    response = httpx.Response(200, headers={"Content-Encoding": "gzip"}, stream=stream)
+
+    tracemalloc.start()
+    try:
+        with pytest.raises(HydrationFailed) as failure:
+            await fetch_response(response, max_bytes=256)
+        _, peak_bytes = tracemalloc.get_traced_memory()
+    finally:
+        tracemalloc.stop()
+
+    assert failure.value.category == "provider_oversize"
+    assert peak_bytes < 1024 * 1024
+
+
+async def test_valid_gzip_at_the_response_limit_is_accepted() -> None:
+    body = json.dumps(filmography_response(cast=[movie_credit()])).encode()
+    midpoint = len(body) // 2
+    stream = ChunkedBody(
+        gzip.compress(body[:midpoint]) + gzip.compress(body[midpoint:])
+    )
+    payload = await fetch_response(
+        httpx.Response(200, headers={"Content-Encoding": "gzip"}, stream=stream),
+        max_bytes=len(body),
+    )
+    assert [credit.provider_credit_id for credit in payload.credits] == ["acting-1"]
+
+
+@pytest.mark.parametrize("encoding", ["gzip", "br"])
+async def test_truncated_gzip_or_unnegotiated_encoding_is_terminal(
+    encoding: str,
+) -> None:
+    body = json.dumps(filmography_response()).encode()
+    stream = ChunkedBody(gzip.compress(body)[:-8] if encoding == "gzip" else body)
+
+    with pytest.raises(HydrationFailed) as failure:
+        await fetch_response(
+            httpx.Response(200, headers={"Content-Encoding": encoding}, stream=stream)
+        )
+    assert failure.value.category == "provider_response"
     assert not failure.value.retryable
