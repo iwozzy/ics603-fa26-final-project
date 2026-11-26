@@ -8,5 +8,11 @@
             "source.fixAll.eslint": "explicit"
         }
     },
-    "prettier.requireConfig": true
+    "prettier.requireConfig": true,
+    "[sql]": {
+        "editor.defaultFormatter": "sqlfluff.vscode-sqlfluff",
+        "editor.formatOnSave": true
+    },
+    "sqlfluff.executablePath": "${workspaceFolder}/backend/.venv/bin/sqlfluff",
+    "sqlfluff.dialect": "postgres"
 }

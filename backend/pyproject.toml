@@ -11,11 +11,14 @@ dependencies = [
 
 [dependency-groups]
 dev = [
-    "pytest-asyncio>=1.2", "asgi-lifespan>=2.1", "import-linter>=2.6",
+    "pytest-asyncio>=1.2",
+    "asgi-lifespan>=2.1",
+    "import-linter>=2.6",
     "pyrefly>=1.4.1",
     "pytest>=9.2.0",
     "pytest-cov>=7.1.0",
     "ruff>=0.17.4",
+    "sqlfluff>=4.5.0",
 ]
 
 [tool.uv]
