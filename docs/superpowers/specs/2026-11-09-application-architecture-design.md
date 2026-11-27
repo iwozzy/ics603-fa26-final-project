@@ -297,3 +297,7 @@ The original first increment grouped people search and following. **Updated on 2
 Later feature designs settle exact endpoints and schemas, search UX and pagination, filmography/credit filtering, movie matching and ambiguity handling, timeline ordering/navigation, watched/watch-list transitions, existing-account guest merging, registration/login UX, native token lifecycle, exact refresh intervals/backoff values, general quota thresholds and cost units, model investigations and prompts, semantic search technology, media retention if introduced, and the deployment host.
 
 Preserve the agreed boundaries and behavioral constraints when making those choices. New requirements that change identity ownership, transaction guarantees, provider independence, work-delivery semantics, or platform portability should amend this architecture explicitly.
+
+## F003 amendment, 2026-11-26
+
+F003 implements follow-triggered, best-effort hydration within the single API process. Follow commits independently of the in-memory queue. The timeline uses guest-scoped PostgreSQL keyset reads and keeps a measured reading position in application memory across route changes. The approved amendment records the process-local scheduling, quota attribution and catalog reconciliation decisions. [Approved F003 design](2026-11-25-F003-timeline-design.md) · [Delivered timeline architecture](../../architecture/timeline.md)
