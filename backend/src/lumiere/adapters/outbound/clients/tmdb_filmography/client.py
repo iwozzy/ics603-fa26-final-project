@@ -1,4 +1,5 @@
 import asyncio
+from collections.abc import Callable
 
 import httpx
 from pydantic import ValidationError
@@ -21,10 +22,12 @@ class TMDBFilmographyCatalog:
         client: httpx.AsyncClient,
         clock: Clock,
         *,
+        on_throttle: Callable[[HydrationThrottled], None],
         max_bytes: int = 10 * 1024 * 1024,
     ) -> None:
         self.client = client
         self.clock = clock
+        self.on_throttle = on_throttle
         self.max_bytes = max_bytes
 
     async def fetch(self, identity: PersonIdentity) -> PersonFilmography:
@@ -41,7 +44,9 @@ class TMDBFilmographyCatalog:
                         delay = parse_retry_after(
                             response.headers.get("Retry-After"), self.clock.now()
                         )
-                        raise HydrationThrottled(delay)
+                        error = HydrationThrottled(delay)
+                        self.on_throttle(error)
+                        raise error
                     if not response.is_success:
                         raise HydrationFailed(
                             "provider_status", retryable=response.is_server_error

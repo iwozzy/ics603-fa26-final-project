@@ -35,6 +35,13 @@ class ProviderDispatch:
         """Reject new starts at the event loop's monotonic drain deadline."""
         self._shutdown_deadline = deadline
 
+    def observe_throttle(self, error: HydrationThrottled) -> None:
+        """Apply a 429 immediately, retaining its receipt time across stream cleanup."""
+        if error.received_at_monotonic is None:
+            error.received_at_monotonic = self._clock.monotonic()
+        delay = max(_MIN_COOLDOWN_SECONDS, error.retry_after_seconds or 0)
+        self._cooldown_until = max(self._cooldown_until, error.received_at_monotonic + delay)
+
     async def run(
         self, context: GuestContext, operation: Callable[[], Awaitable[PersonFilmography]],
     ) -> PersonFilmography:
@@ -53,8 +60,7 @@ class ProviderDispatch:
         try:
             return await operation()
         except HydrationThrottled as error:
-            delay = max(_MIN_COOLDOWN_SECONDS, error.retry_after_seconds or 0)
-            self._cooldown_until = max(self._cooldown_until, self._clock.monotonic() + delay)
+            self.observe_throttle(error)
             raise
         finally:
             self._in_flight -= 1

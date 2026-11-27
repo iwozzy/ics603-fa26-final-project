@@ -159,8 +159,11 @@ async def test_runtime_assigns_distinct_named_factories_and_instruments_all(monk
         assert container.people_writer.uow_factory().factory is people.sessions  # type: ignore[attr-defined]
         assert container.filmography_hydrator.hydrate.factory().factory is hydration.sessions  # type: ignore[attr-defined]
         assert container.services.follow_person.inner.hydration is container.filmography_hydrator  # type: ignore[attr-defined]
-        assert container.filmography_hydrator.hydrate.catalog.inner.client is container.client  # type: ignore[attr-defined]
-        assert container.filmography_hydrator.hydrate.dispatch._admission is container.admission
+        hydrate = container.filmography_hydrator.hydrate
+        catalog = hydrate.catalog.inner  # type: ignore[attr-defined]
+        assert catalog.client is container.client
+        assert catalog.on_throttle == hydrate.dispatch.observe_throttle
+        assert hydrate.dispatch._admission is container.admission
         for pool in (application, people, hydration):
             assert pool.engine.pool.size() == 5  # type: ignore[attr-defined]
             assert pool.engine.pool._max_overflow == 5  # type: ignore[attr-defined]

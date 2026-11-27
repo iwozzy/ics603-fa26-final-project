@@ -1,7 +1,7 @@
 import gzip
 import json
 import tracemalloc
-from collections.abc import AsyncIterator
+from collections.abc import AsyncIterator, Callable
 from datetime import UTC, date, datetime
 from pathlib import Path
 from typing import override
@@ -27,6 +27,10 @@ IDENTITY = PersonIdentity(CatalogProvider.TMDB, 10297)
 class FixedClock:
     def now(self) -> datetime:
         return datetime(2026, 11, 26, 12, 0, tzinfo=UTC)
+
+
+def unexpected_throttle(error: HydrationThrottled) -> None:
+    pytest.fail(f"Unexpected provider throttle: {error}")
 
 
 class ChunkedBody(httpx.AsyncByteStream):
@@ -62,14 +66,15 @@ def filmography_response(
 
 
 async def fetch_response(
-    response: httpx.Response, *, max_bytes: int = 10 * 1024 * 1024
+    response: httpx.Response, *, max_bytes: int = 10 * 1024 * 1024,
+    on_throttle: Callable[[HydrationThrottled], None] = unexpected_throttle,
 ) -> PersonFilmography:
     transport = httpx.MockTransport(lambda _: response)
     async with httpx.AsyncClient(
         base_url="https://catalog.test", transport=transport
     ) as client:
         return await TMDBFilmographyCatalog(
-            client, FixedClock(), max_bytes=max_bytes
+            client, FixedClock(), on_throttle=on_throttle, max_bytes=max_bytes
         ).fetch(IDENTITY)
 
 
@@ -87,7 +92,7 @@ async def test_cast_and_crew_keep_separate_credit_ids() -> None:
     async with httpx.AsyncClient(
         base_url="https://catalog.test", transport=httpx.MockTransport(respond)
     ) as client:
-        payload = await TMDBFilmographyCatalog(client, FixedClock()).fetch(IDENTITY)
+        payload = await TMDBFilmographyCatalog(client, FixedClock(), on_throttle=unexpected_throttle).fetch(IDENTITY)
 
     assert len(requests) == 1
     assert requests[0].method == "GET"
@@ -403,8 +408,10 @@ async def test_throttle_exposes_normalized_retry_after(
     header: str | None, delay: float | None
 ) -> None:
     headers = {} if header is None else {"Retry-After": header}
+    receipts: list[HydrationThrottled] = []
     with pytest.raises(HydrationThrottled) as failure:
-        await fetch_response(httpx.Response(429, headers=headers))
+        await fetch_response(httpx.Response(429, headers=headers), on_throttle=receipts.append)
+    assert receipts == [failure.value]
     assert failure.value.retryable
     assert failure.value.retry_after_seconds == delay
 
@@ -432,7 +439,7 @@ async def test_http_status_emits_one_attempt_with_correct_retryability(
         follow_redirects=True,
     ) as client:
         with pytest.raises(HydrationFailed) as failure:
-            await TMDBFilmographyCatalog(client, FixedClock()).fetch(IDENTITY)
+            await TMDBFilmographyCatalog(client, FixedClock(), on_throttle=unexpected_throttle).fetch(IDENTITY)
     assert len(requests) == 1
     assert failure.value.retryable is retryable
     assert "synthetic provider failure" not in str(failure.value)
@@ -452,7 +459,7 @@ async def test_transport_failure_is_retryable_without_retrying(
         base_url="https://catalog.test", transport=httpx.MockTransport(respond)
     ) as client:
         with pytest.raises(HydrationFailed) as failure:
-            await TMDBFilmographyCatalog(client, FixedClock()).fetch(IDENTITY)
+            await TMDBFilmographyCatalog(client, FixedClock(), on_throttle=unexpected_throttle).fetch(IDENTITY)
     assert len(requests) == 1
     assert failure.value.retryable
     assert "synthetic transport failure" not in str(failure.value)

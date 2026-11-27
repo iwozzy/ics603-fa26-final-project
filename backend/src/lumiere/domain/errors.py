@@ -20,6 +20,7 @@ class HydrationFailed(Exception):
 class HydrationThrottled(HydrationFailed):
     def __init__(self, retry_after_seconds: float | None) -> None:
         self.retry_after_seconds = retry_after_seconds
+        self.received_at_monotonic: float | None = None
         super().__init__("provider_throttled", retryable=True)
 
 

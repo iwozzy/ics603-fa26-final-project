@@ -94,7 +94,8 @@ def runtime(monkeypatch: pytest.MonkeyPatch, *, attempt_timeout: float = 5) -> R
     writer = PeopleWriter(ControlledPeoplePersistence())
     dispatch = ProviderDispatch(admission, clock, rate_limit=1)
     hydrate = HydrateFilmography(
-        store, TMDBFilmographyCatalog(client, clock), dispatch, clock, attempt_timeout=attempt_timeout,
+        store, TMDBFilmographyCatalog(client, clock, on_throttle=dispatch.observe_throttle),
+        dispatch, clock, attempt_timeout=attempt_timeout,
     )
     hydrator = FilmographyHydrator(hydrate)
     services = HttpServices(
