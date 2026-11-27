@@ -2,6 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type ComponentRef, type P
 import { Platform, Pressable, StyleSheet, Text } from 'react-native';
 import type { PersonSummary } from '../../../domain/people';
 import { PersonRow } from './PersonRow';
+import { useThemedStyles, type ThemeColors } from './theme';
 
 export type PersonAction = 'follow' | 'following' | 'unfollow' | 'hidden';
 
@@ -10,6 +11,7 @@ interface Props {
   touchSelected: boolean; onTouchSelect(rowId: string): void; onActivate(person: PersonSummary): void;
 }
 export function PersonActionRow({ person, rowId, action: kind, touchSelected, onTouchSelect, onActivate }: Props) {
+  const styles = useThemedStyles(createStyles);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
   const modality = useRef<'mouse' | 'keyboard' | 'touch'>('keyboard');
@@ -35,7 +37,7 @@ export function PersonActionRow({ person, rowId, action: kind, touchSelected, on
   const revealed = hovered || focused || touchSelected;
   const revealStyle = { opacity: revealed ? 1 : 0, pointerEvents: revealed ? 'auto' as const : 'none' as const };
   const action = kind === 'hidden' ? null : kind === 'following' ?
-    <Pressable ref={actionRef} role="status" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text>Following</Text></Pressable> :
+    <Pressable ref={actionRef} role="status" onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)} style={[styles.status, revealStyle, focused && styles.focused]}><Text style={styles.statusText}>Following</Text></Pressable> :
     <Pressable ref={actionRef} accessibilityRole="button" accessibilityLabel={kind === 'unfollow' ? 'Unfollow' : 'Follow +'} onFocus={() => setFocused(modality.current === 'keyboard')} onBlur={() => setFocused(false)}
       onPress={() => {
         if (modality.current === 'touch' && !touchActivation.current) return;
@@ -66,7 +68,7 @@ export function PersonActionRow({ person, rowId, action: kind, touchSelected, on
       if ((event.pointerType === 'touch' || event.pointerType === 'pen') && current && current.id === event.pointerId && !current.moved) onTouchSelect(rowId);
     }}>{content}</div>;
 }
-const styles = StyleSheet.create({
-  action: { paddingVertical: 9, paddingHorizontal: 14, borderWidth: 2, borderColor: '#c3c7cc', borderRadius: 10 },
-  actionText: { fontSize: 15, color: '#343941' }, status: { fontSize: 15, color: '#6c737c', padding: 10, borderWidth: 2, borderColor: '#c3c7cc', borderRadius: 10 }, focused: { borderColor: '#4279b2' },
+const createStyles = (colors: ThemeColors) => StyleSheet.create({
+  action: { paddingVertical: 9, paddingHorizontal: 14, borderWidth: 2, borderColor: colors.border, borderRadius: 10 },
+  actionText: { fontSize: 15, color: colors.body }, statusText: { fontSize: 15, color: colors.muted }, status: { fontSize: 15, color: colors.muted, padding: 10, borderWidth: 2, borderColor: colors.border, borderRadius: 10 }, focused: { borderColor: colors.focus },
 });

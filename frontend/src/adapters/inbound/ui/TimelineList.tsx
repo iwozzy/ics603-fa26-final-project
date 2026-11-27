@@ -5,6 +5,7 @@ import type { MovieSummary, TimelineAnchor } from '../../../domain/timeline';
 import { MovieRow } from './MovieRow';
 import { createTimelineGestures, type TimelineDirection } from './timeline-gestures';
 import { useTimelineViewport } from './useTimelineViewport';
+import { useThemedStyles, type ThemeColors } from './theme';
 
 export interface TimelineListHandle { captureAnchor(): TimelineAnchor | null }
 interface Props {
@@ -20,6 +21,7 @@ const edgeThreshold = 0.12;
 const movieKey = (movie: MovieSummary) => String(movie.id);
 
 export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, onLoad }: Props) {
+  const styles = useThemedStyles(createStyles);
   const viewport = useTimelineViewport(state.items, state.restoration, active);
   const [initialWindow] = useState(() => ({
     revision: state.restoration?.revision, index: state.items.findIndex(movie => movie.id === state.restoration?.anchor?.id),
@@ -129,4 +131,4 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
   </View>;
 }
 
-const styles = StyleSheet.create({ region: { flex: 1, minHeight: 0, backgroundColor: '#fff' } });
+const createStyles = (colors: ThemeColors) => StyleSheet.create({ region: { flex: 1, minHeight: 0, backgroundColor: colors.background } });
