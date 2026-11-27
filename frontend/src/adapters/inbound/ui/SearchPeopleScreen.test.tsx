@@ -12,6 +12,28 @@ import { ListFollowing } from '../../../application/use-cases/list-following';
 import { SearchPeople } from '../../../application/use-cases/search-people';
 import { DeferredFollowing, FakeSessions, snapshot } from '../../../test-utils/fakes/following';
 const placeholder = 'Search for actors, directors, or creative team to follow';
+let mockFocused = true;
+beforeEach(() => { mockFocused = true; });
+
+test.each(['completed', 'pending'])('a %s search survives leaving and returning without another request', async phase => {
+  const repository = new DeferredRepository();
+  const view = await renderWithPorts(<SearchPeopleScreen />, repository);
+  await fireEvent.changeText(screen.getByPlaceholderText(placeholder), 'Tom');
+  await fireEvent.press(screen.getByRole('button', { name: 'Search' }));
+  if (phase === 'completed') await act(() => repository.calls[0].resolve(result('Tom')));
+  await fireEvent.changeText(screen.getByPlaceholderText(placeholder), 'Tom revised');
+
+  mockFocused = false;
+  await view.rerender(<SearchPeopleScreen />);
+  if (phase === 'pending') await act(() => repository.calls[0].resolve(result('Tom')));
+  mockFocused = true;
+  await view.rerender(<SearchPeopleScreen />);
+
+  expect(screen.getByPlaceholderText(placeholder).props.value).toBe('Tom revised');
+  expect(screen.getByText('Tom')).toBeTruthy();
+  expect(repository.calls).toHaveLength(1);
+  expect(repository.calls[0].signal.aborted).toBe(false);
+});
 
 test('entering and returning to Search uses local follows without another list request', async () => {
   const following = new DeferredFollowing();
@@ -83,4 +105,8 @@ test('row limits mixed titles and handles missing or broken images without separ
   expect(screen.queryByLabelText('Tom silhouette')).not.toBeNull();
 });
 
-jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void) => { const React = jest.requireActual<typeof import('react')>('react'); React.useEffect(effect, [effect]); } }));
+jest.mock('expo-router', () => ({ useFocusEffect: (effect: () => void | (() => void)) => {
+  const React = jest.requireActual<typeof import('react')>('react');
+  const focused = mockFocused;
+  React.useEffect(() => { if (focused) return effect(); }, [effect, focused]);
+} }));

@@ -1,5 +1,6 @@
 import { test, expect, type Page, type APIRequestContext } from '@playwright/test';
 const row = (page: Page, index = 0) => page.getByTestId('search-result-' + index);
+const followingRows = (page: Page) => page.getByTestId(/^following-person-/).filter({ visible: true });
 const input = (page: Page) => page.getByRole('textbox', { name: 'Search people' });
 async function search(page: Page) {
   await input(page).fill('Tom'); await input(page).press('Enter');
@@ -65,7 +66,7 @@ test('follow people by mouse and keyboard; cap, newest-first and reload persiste
   await page.getByRole('link', { name: 'Following', exact: true }).click();
   await expect(page).toHaveURL(/\/following$/);
   await expect(input(page)).toBeHidden();
-  await expect(page.getByText('Tom Hanks', { exact: true })).toBeVisible();
+  await expect(followingRows(page).getByText('Tom Hanks', { exact: true })).toBeVisible();
   const names = await page.locator('body').innerText();
   expect(names.indexOf('Tom Hanks')).toBeLessThan(names.indexOf('Tom Holland'));
   expect(names.indexOf('Tom Holland')).toBeLessThan(names.indexOf('Tom Skerritt'));
@@ -124,7 +125,7 @@ test('following missing catalog person rolls back preserving query and does not 
   await expect(input(page)).toHaveValue('Tom'); await expect(page.getByText('Absent Person')).toBeVisible();
 });
 
-test('following pending save survives navigation and Search resets on returning and history', async ({ page }) => {
+test('following pending save survives navigation and Search retains results on return and history', async ({ page }) => {
   await page.goto('/'); await search(page);
   // Ensure the selected summary is stored with an explicit successful follow.
   await save(page, 0);
@@ -140,11 +141,13 @@ test('following pending save survives navigation and Search resets on returning 
   try {
     await row(page, 1).hover(); await row(page, 1).getByRole('button', { name: 'Follow +' }).click(); await saved;
     await page.getByRole('link', { name: 'Following', exact: true }).click();
-    await expect(page.getByText('Tom Holland', { exact: true })).toBeVisible(); release();
+    await expect(followingRows(page).getByText('Tom Holland', { exact: true })).toBeVisible(); release();
     await page.getByRole('link', { name: 'Search', exact: true }).click();
-    await expect(input(page)).toHaveValue(''); await expect(page.getByText('Example searches:').filter({ visible: true })).toBeVisible();
-    await page.goBack(); await expect(page.getByText('Tom Holland', { exact: true })).toBeVisible();
-    await page.goForward(); await expect(input(page)).toHaveValue('');
+    await expect(input(page)).toHaveValue('Tom'); await expect(row(page, 1)).toContainText('Tom Holland');
+    await expect(page.getByText('Example searches:')).toHaveCount(0);
+    await page.goBack(); await expect(followingRows(page).getByText('Tom Holland', { exact: true })).toBeVisible();
+    await page.goForward(); await expect(input(page)).toHaveValue('Tom');
+    await expect(row(page, 1)).toContainText('Tom Holland');
   } finally { release(); }
 });
 
@@ -186,7 +189,7 @@ test('follow people touch reveals first, switches, dismisses and scrolls without
     expect(posts).toBe(1);
     await expect(row(page, 2).getByRole('button')).toHaveCSS('opacity', '0');
     await page.getByRole('link', { name: 'Following', exact: true }).tap();
-    await expect(page).toHaveURL(/\/following$/); await expect(page.getByText('Tom Skerritt', { exact: true })).toBeVisible();
+    await expect(page).toHaveURL(/\/following$/); await expect(followingRows(page).getByText('Tom Skerritt', { exact: true })).toBeVisible();
   } finally { await context.close(); }
 });
 

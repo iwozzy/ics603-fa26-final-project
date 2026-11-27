@@ -1,13 +1,10 @@
-import { useCallback, useRef, useState, type ComponentRef } from 'react';
+import { useRef, useState, type ComponentRef } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View, useWindowDimensions } from 'react-native';
-import { useFocusEffect } from 'expo-router';
 import { SearchResults } from './SearchResults';
 import { useSearchPeople } from './useSearchPeople';
 
 export default function SearchPeopleScreen() {
   const state = useSearchPeople();
-  const { reset } = state;
-  useFocusEffect(useCallback(() => reset, [reset]));
   const input = useRef<ComponentRef<typeof TextInput>>(null);
   const [focused, setFocused] = useState(false);
   const [buttonFocused, setButtonFocused] = useState(false);
