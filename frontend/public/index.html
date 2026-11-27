@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="%LANG_ISO_CODE%">
+  <head>
+    <meta charset="utf-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no" />
+    <meta name="color-scheme" content="light dark" />
+    <meta name="theme-color" content="#ffffff" media="(prefers-color-scheme: light)" />
+    <meta name="theme-color" content="#15181d" media="(prefers-color-scheme: dark)" />
+    <title>%WEB_TITLE%</title>
+    <style id="expo-reset">
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        overflow: hidden;
+      }
+      #root {
+        display: flex;
+        height: 100%;
+        flex: 1;
+      }
+    </style>
+    <style id="browser-theme">
+      :root {
+        color-scheme: light dark;
+      }
+      /* Keep these backgrounds and theme-color hints in sync with ui/theme.ts. */
+      html,
+      body {
+        background-color: #ffffff;
+      }
+      @media (prefers-color-scheme: dark) {
+        html,
+        body {
+          background-color: #15181d;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <noscript>You need to enable JavaScript to run this app.</noscript>
+    <div id="root"></div>
+  </body>
+</html>
