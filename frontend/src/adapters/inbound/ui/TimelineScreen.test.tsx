@@ -75,7 +75,43 @@ test('each focus enters once and discarded guest and focus callbacks cannot move
   expect(store.getSnapshot().anchor).toEqual(anchor);
 });
 
-test('reentry renders the retained movie even when it lies far beyond the first virtualized batch', async () => {
+test('route return keeps the mounted list and cached movie while refresh is pending', async () => {
+  const listRender = jest.spyOn(FlatList.prototype, 'render');
+  const renderList = jest.spyOn(listModule, 'TimelineList');
+  const { repository, store, sessions, view } = await renderTimeline();
+  await act(() => repository.calls[0].resolve(page));
+  const mountedList = listRender.mock.contexts.at(-1);
+  const anchor = { id: movie.id, releaseDate: movie.releaseDate, offset: -17 };
+  await act(() => store.rememberAnchor(anchor));
+
+  mockFocused = false;
+  await view.rerender(<TimelineScreen />);
+  expect(screen.getByRole('header', { name: movie.title })).toBeTruthy();
+  const inactive = renderList.mock.calls.at(-1)![0];
+  await act(() => inactive.onAnchor({ ...anchor, offset: -90 }, true));
+  await act(() => inactive.onLoad('newer'));
+  expect(store.getSnapshot().anchor).toEqual(anchor);
+  expect(repository.calls).toHaveLength(1);
+
+  mockFocused = true;
+  await view.rerender(<TimelineScreen />);
+  expect(repository.calls[1].query).toEqual({ mode: 'anchor', anchor: { id: movie.id, releaseDate: movie.releaseDate } });
+  expect(store.getSnapshot().phase).toBe('loading');
+  expect(screen.getByRole('header', { name: movie.title })).toBeTruthy();
+  expect(listRender.mock.contexts.at(-1)).toBe(mountedList);
+  await act(() => inactive.onAnchor({ ...anchor, offset: -90 }, true));
+  expect(store.getSnapshot().anchor).toEqual(anchor);
+  expect(repository.calls[1].signal.aborted).toBe(false);
+
+  await act(() => repository.calls[1].resolve(page));
+  expect(listRender.mock.contexts.at(-1)).toBe(mountedList);
+  await act(() => sessions.createGuest());
+  expect(listRender.mock.contexts.at(-1)).not.toBe(mountedList);
+  expect(screen.queryByRole('header', { name: movie.title })).toBeNull();
+});
+
+test('reentry seeks the retained movie even when it lies far beyond the first virtualized batch', async () => {
+  const scrollToIndex = jest.spyOn(FlatList.prototype, 'scrollToIndex');
   const { repository, store, view } = await renderTimeline();
   const items = Array.from({ length: 200 }, (_, index) => ({ ...movie, id: index + 1, title: 'Film ' + (index + 1) }));
   await act(() => repository.calls[0].resolve({ ...page, items }));
@@ -84,8 +120,51 @@ test('reentry renders the retained movie even when it lies far beyond the first 
   await view.rerender(<TimelineScreen />);
   mockFocused = true;
   await view.rerender(<TimelineScreen />);
-  expect(screen.getByRole('header', { name: 'Film 41' })).toBeTruthy();
-  expect(screen.queryByRole('header', { name: 'Film 100' })).toBeNull();
+  // The native test host does not execute scrolling or measure row positions.
+  // Movie 41 is index 159 in the store's descending-ID order.
+  expect(scrollToIndex).toHaveBeenCalledWith({ index: 159, animated: false });
+  expect(repository.calls[1].query).toEqual({ mode: 'anchor', anchor: { id: 41, releaseDate: movie.releaseDate } });
+});
+
+test('returning accepts a fresh edge gesture even when its cursor was latched on the previous visit', async () => {
+  const { repository, view } = await renderTimeline();
+  await act(() => repository.calls[0].resolve(page));
+  const region = screen.getByTestId('timeline-gestures');
+  await fireEvent(region, 'touchStart', { nativeEvent: { pageY: 50 } });
+  await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 70 } });
+  await act(() => repository.calls[1].resolve(page));
+
+  mockFocused = false;
+  await view.rerender(<TimelineScreen />);
+  mockFocused = true;
+  await view.rerender(<TimelineScreen />);
+  await act(() => repository.calls[2].resolve(page));
+  await fireEvent(screen.getByTestId('timeline-gestures'), 'touchStart', { nativeEvent: { pageY: 50 } });
+  await fireEvent(screen.getByTestId('timeline-gestures'), 'touchMove', { nativeEvent: { pageY: 70 } });
+  expect(repository.calls).toHaveLength(4);
+  expect(repository.calls[3].query).toEqual({ mode: 'page', direction: 'newer', cursor: 'future' });
+});
+
+test.each(['current', 'queued'])('a %s touch move from a previous visit cannot page after returning', async delivery => {
+  const { repository, view } = await renderTimeline();
+  await act(() => repository.calls[0].resolve(page));
+  const region = screen.getByTestId('timeline-gestures');
+  const oldMove = region.props.onTouchMove as (event: { nativeEvent: { pageY: number } }) => void;
+  await fireEvent(region, 'touchStart', { nativeEvent: { pageY: 50 } });
+  mockFocused = false;
+  await view.rerender(<TimelineScreen />);
+  mockFocused = true;
+  await view.rerender(<TimelineScreen />);
+  await act(() => repository.calls[1].resolve(page));
+
+  if (delivery === 'queued') await act(() => oldMove({ nativeEvent: { pageY: 70 } }));
+  else await fireEvent(screen.getByTestId('timeline-gestures'), 'touchMove', { nativeEvent: { pageY: 70 } });
+  expect(repository.calls).toHaveLength(2);
+
+  await fireEvent(screen.getByTestId('timeline-gestures'), 'touchStart', { nativeEvent: { pageY: 50 } });
+  await fireEvent(screen.getByTestId('timeline-gestures'), 'touchMove', { nativeEvent: { pageY: 70 } });
+  expect(repository.calls).toHaveLength(3);
+  expect(repository.calls[2].query).toEqual({ mode: 'page', direction: 'newer', cursor: 'future' });
 });
 
 test('layout of an accepted short newer page cannot consume another cursor without fresh intent', async () => {

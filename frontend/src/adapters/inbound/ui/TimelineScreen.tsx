@@ -15,7 +15,6 @@ export default function TimelineScreen() {
       const anchor = viewport.current?.captureAnchor() ?? null;
       ++entry.current;
       store.leave(anchor);
-      setVisibleEntry(0);
     };
   }, [store]));
 
@@ -23,7 +22,7 @@ export default function TimelineScreen() {
   const active = useCallback(() => entry.current === visibleEntry && guest === sessions.identityGeneration,
     [guest, sessions, visibleEntry]);
   if (!visibleEntry) return null;
-  return <TimelineList ref={viewport} key={visibleEntry + '/' + guest} state={state} active={active}
+  return <TimelineList ref={viewport} key={guest} state={state} active={active}
     onAnchor={(anchor, userMoved) => { if (active()) store.rememberAnchor(anchor, userMoved); }}
     onLoad={direction => { if (active()) void store.load(direction); }}
     onScrollSettled={() => { if (active()) void store.settleScroll(); }} />;

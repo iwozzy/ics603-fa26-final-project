@@ -28,6 +28,14 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
   const latched = useRef<Partial<Record<TimelineDirection, string>>>({});
   const awaitingMeasurement = useRef(false);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  useLayoutEffect(() => {
+    // Focus changes retain the list, but each visit starts with fresh gesture state.
+    intent.current = null;
+    latched.current = {};
+    awaitingMeasurement.current = false;
+    clearTimeout(settle.current);
+    settle.current = undefined;
+  }, [active]);
   const { listRef, viewportRef, scroll, captureAnchor, setRow, onRowLayout } = viewport;
   useImperativeHandle(ref, () => ({ captureAnchor: () => active() ? captureAnchor() : null }), [active, captureAnchor]);
   function remember(userMoved: boolean) {
@@ -79,7 +87,9 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
   useLayoutEffect(() => { latestIntent.current = onIntent; });
   // The adapter stores this callback and invokes it only from native or browser events.
   // eslint-disable-next-line react-hooks/refs
-  const gestures = useMemo(() => createTimelineGestures(direction => latestIntent.current(direction)), []);
+  const gestures = useMemo(() => createTimelineGestures(direction => {
+    if (active()) latestIntent.current(direction);
+  }), [active]);
   useLayoutEffect(() => {
     const detach = gestures.attach(listRef.current?.getScrollableNode());
     return () => { detach(); clearTimeout(settle.current); };
