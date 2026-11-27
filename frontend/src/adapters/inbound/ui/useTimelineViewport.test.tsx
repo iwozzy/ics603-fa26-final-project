@@ -124,3 +124,50 @@ test.each([false, true])('zero-offset index alignment before scroll delivery res
   viewport.setRow(2, box(5, 160));
   expect(viewport.updateScroll({ ...event, contentOffset: { y: 820 } } as import('react-native').NativeScrollEvent)).toBe(20);
 });
+
+test('a virtualized anchor remounts after content shrink clamps a measured scroll offset', async () => {
+  const items = [movie(3), movie(2)];
+  let restoration: TimelineViewState['restoration'] = null;
+  const hook = await renderHook(() => useTimelineViewport(items, restoration));
+  const viewport = hook.result.current;
+  const node = { scrollTop: 0 };
+  const scrollToOffset = jest.fn(({ offset }: { offset: number }) => { node.scrollTop = offset; });
+  viewport.listRef.current = { scrollToOffset, getScrollableNode: () => node } as unknown as FlatList<MovieSummary>;
+  viewport.viewportRef.current = box(0, 697);
+  viewport.setRow(2, box(7344, 260));
+  restoration = { revision: 2, anchor: { id: 2, releaseDate: '2022-08-03', offset: -146 } };
+  await hook.rerender(undefined);
+  const event = (y: number) => ({ contentOffset: { y }, layoutMeasurement: { height: 697 },
+    contentSize: { height: 11016 } }) as import('react-native').NativeScrollEvent;
+  expect(node.scrollTop).toBe(7490);
+  expect(viewport.updateScroll(event(7490))).toBe(0);
+  // Browser clamps scrollTop to 4271 - 697 while the measured row is unmounted.
+  viewport.setRow(2, null);
+  node.scrollTop = 3574;
+  viewport.setRow(2, box(3770, 260));
+  expect(viewport.updateScroll(event(3574))).toBe(0);
+  await act(() => viewport.onRowLayout());
+  expect(node.scrollTop).toBe(7490);
+});
+
+test('a retained-window correction delivered after anchored refresh is still programmatic', async () => {
+  const items = [movie(3), movie(2)];
+  let restoration: TimelineViewState['restoration'] = null;
+  const hook = await renderHook(() => useTimelineViewport(items, restoration));
+  const viewport = hook.result.current;
+  const node = { scrollTop: 0 };
+  const scrollToOffset = jest.fn(({ offset }: { offset: number }) => { node.scrollTop = offset; });
+  viewport.listRef.current = { scrollToOffset, getScrollableNode: () => node } as unknown as FlatList<MovieSummary>;
+  viewport.viewportRef.current = box(0, 697);
+  viewport.setRow(2, box(0, 260));
+  const anchor = { id: 2, releaseDate: '2022-08-03', offset: -146 };
+  restoration = { revision: 2, anchor };
+  await hook.rerender(undefined);
+  expect(node.scrollTop).toBe(146);
+  viewport.setRow(2, box(-146, 260));
+  restoration = { revision: 3, anchor };
+  await hook.rerender(undefined);
+  const event = { contentOffset: { y: 146 }, layoutMeasurement: { height: 697 }, contentSize: { height: 3672 } };
+  expect(viewport.updateScroll(event as import('react-native').NativeScrollEvent)).toBe(0);
+  expect(viewport.captureAnchor()).toEqual(anchor);
+});

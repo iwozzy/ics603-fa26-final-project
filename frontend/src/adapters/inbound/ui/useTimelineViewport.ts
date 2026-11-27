@@ -19,6 +19,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   const scroll = useRef({ y: 0, height: 0, content: 0 });
   const target = useRef<TimelineAnchor | null>(null);
   const commandedY = useRef<number | null>(null);
+  const measuredNode = useRef<RowNode | undefined>(undefined);
   const indexSeek = useRef<'seeking' | 'aligned' | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
   const setRow = useCallback((id: number, node: RowNode | null) => {
@@ -47,8 +48,11 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     const anchor = target.current;
     const viewport = bounds(viewportRef.current);
     if (!active() || !anchor || !viewport?.height || !listRef.current) return false;
-    const row = bounds(rows.current.get(anchor.id));
+    const rowNode = rows.current.get(anchor.id);
+    const row = bounds(rowNode);
     if (!row?.height) return false;
+    const newHost = rowNode !== measuredNode.current;
+    measuredNode.current = rowNode;
     const delta = row.top - viewport.top - anchor.offset;
     if (Math.abs(delta) < 0.5) {
       // An index seek can finish layout before its scroll notification arrives.
@@ -65,7 +69,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
       setFooterHeight(footerHeight + Math.ceil(offset + viewport.height - content));
       return true;
     }
-    if (commandedY.current !== offset) {
+    if (newHost || commandedY.current !== offset) {
       commandedY.current = offset;
       listRef.current.scrollToOffset({ offset, animated: false });
     }
@@ -76,9 +80,13 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   useLayoutEffect(() => { correction.current = correct; });
   useLayoutEffect(() => {
     target.current = restoration?.anchor ?? null;
-    commandedY.current = null;
+    measuredNode.current = undefined;
     indexSeek.current = null;
-    if (!target.current) return;
+    if (!target.current) {
+      commandedY.current = null;
+      return;
+    }
+    // A retained-window correction may deliver its scroll event after refresh replaces the data.
     const index = items.findIndex(movie => movie.id === target.current?.id);
     if (index < 0) return;
     let timer: ReturnType<typeof setTimeout>;
@@ -110,6 +118,14 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     scroll.current = { y, height: event.layoutMeasurement.height, content: event.contentSize.height };
     const programmatic = indexSeek.current === 'seeking' || (commandedY.current !== null && Math.abs(y - commandedY.current) <= 1);
     const delta = y - before;
+    // Virtualization can unmount the anchor, briefly shrink the content, and clamp scrollTop.
+    // Its replacement host row needs a fresh correction even if the desired offset is identical.
+    if (delta && !programmatic && target.current && commandedY.current !== null && measuredNode.current
+      && measuredNode.current !== rows.current.get(target.current.id)) {
+      indexSeek.current = 'seeking';
+      correction.current();
+      return 0;
+    }
     if (delta && !programmatic && target.current && (indexSeek.current === 'aligned' || commandedY.current !== null)) {
       const row = bounds(rows.current.get(target.current.id));
       const region = bounds(viewportRef.current);
