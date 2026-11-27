@@ -125,14 +125,15 @@ test.each([false, true])('zero-offset index alignment before scroll delivery res
   expect(viewport.updateScroll({ ...event, contentOffset: { y: 820 } } as import('react-native').NativeScrollEvent)).toBe(20);
 });
 
-test('a virtualized anchor remounts after content shrink clamps a measured scroll offset', async () => {
+test.each([false, true])('content shrink restores a virtualized anchor with clamp delivery before remount (%s)', async beforeRemount => {
   const items = [movie(3), movie(2)];
   let restoration: TimelineViewState['restoration'] = null;
   const hook = await renderHook(() => useTimelineViewport(items, restoration));
   const viewport = hook.result.current;
   const node = { scrollTop: 0 };
   const scrollToOffset = jest.fn(({ offset }: { offset: number }) => { node.scrollTop = offset; });
-  viewport.listRef.current = { scrollToOffset, getScrollableNode: () => node } as unknown as FlatList<MovieSummary>;
+  const scrollToIndex = jest.fn();
+  viewport.listRef.current = { scrollToOffset, scrollToIndex, getScrollableNode: () => node } as unknown as FlatList<MovieSummary>;
   viewport.viewportRef.current = box(0, 697);
   viewport.setRow(2, box(7344, 260));
   restoration = { revision: 2, anchor: { id: 2, releaseDate: '2022-08-03', offset: -146 } };
@@ -144,8 +145,12 @@ test('a virtualized anchor remounts after content shrink clamps a measured scrol
   // Browser clamps scrollTop to 4271 - 697 while the measured row is unmounted.
   viewport.setRow(2, null);
   node.scrollTop = 3574;
+  if (beforeRemount) {
+    expect(viewport.updateScroll(event(3574))).toBe(0);
+    expect(scrollToIndex).toHaveBeenCalledWith({ index: 1, animated: false });
+  }
   viewport.setRow(2, box(3770, 260));
-  expect(viewport.updateScroll(event(3574))).toBe(0);
+  if (!beforeRemount) expect(viewport.updateScroll(event(3574))).toBe(0);
   await act(() => viewport.onRowLayout());
   expect(node.scrollTop).toBe(7490);
 });
@@ -170,4 +175,33 @@ test('a retained-window correction delivered after anchored refresh is still pro
   const event = { contentOffset: { y: 146 }, layoutMeasurement: { height: 697 }, contentSize: { height: 3672 } };
   expect(viewport.updateScroll(event as import('react-native').NativeScrollEvent)).toBe(0);
   expect(viewport.captureAnchor()).toEqual(anchor);
+});
+
+test.each([false, true])('an absent clamped row releases scroll on exhaustion or user takeover (%s)', async explicitIntent => {
+  jest.useFakeTimers();
+  try {
+    const items = [movie(3), movie(2)];
+    let restoration: TimelineViewState['restoration'] = null;
+    const hook = await renderHook(() => useTimelineViewport(items, restoration));
+    const viewport = hook.result.current;
+    const scrollToIndex = jest.fn();
+    viewport.listRef.current = { scrollToIndex, scrollToOffset: jest.fn(), getScrollableNode: () => ({ scrollTop: 0 }) } as unknown as FlatList<MovieSummary>;
+    viewport.viewportRef.current = box(0, 400);
+    viewport.setRow(2, box(800, 200));
+    restoration = { revision: 2, anchor: { id: 2, releaseDate: '2022-08-03', offset: 0 } };
+    await hook.rerender(undefined);
+    const event = (y: number) => ({ contentOffset: { y }, layoutMeasurement: { height: 400 },
+      contentSize: { height: 2000 } }) as import('react-native').NativeScrollEvent;
+    expect(viewport.updateScroll(event(800))).toBe(0);
+    viewport.setRow(2, null);
+    expect(viewport.updateScroll(event(400))).toBe(0);
+    if (explicitIntent) {
+      viewport.onUserIntent();
+      expect(viewport.updateScroll(event(425))).toBe(25);
+    }
+    await act(() => jest.runAllTimers());
+    expect(scrollToIndex).toHaveBeenCalledTimes(explicitIntent ? 1 : 6);
+    expect(viewport.updateScroll(event(explicitIntent ? 450 : 425))).toBe(25);
+    expect(viewport.captureAnchor()).toBeNull();
+  } finally { jest.useRealTimers(); }
 });

@@ -77,6 +77,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   }, [active, footerHeight]);
 
   const correction = useRef(correct);
+  const locateTarget = useRef<(() => void) | null>(null);
   useLayoutEffect(() => { correction.current = correct; });
   useLayoutEffect(() => {
     target.current = restoration?.anchor ?? null;
@@ -92,14 +93,22 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     let timer: ReturnType<typeof setTimeout>;
     let attempts = 0;
     function locate() {
-      if (!active() || !target.current || correction.current() || attempts >= 6) return;
+      clearTimeout(timer);
+      if (!active() || !target.current || correction.current()) return;
+      if (attempts >= 6) {
+        // A later layout can still measure the movie. Ordinary scroll now belongs to the reader.
+        indexSeek.current = null;
+        commandedY.current = null;
+        return;
+      }
       ++attempts;
       indexSeek.current = 'seeking';
       listRef.current?.scrollToIndex({ index, animated: false });
       timer = setTimeout(locate, 75);
     }
+    locateTarget.current = locate;
     locate();
-    return () => { clearTimeout(timer); target.current = null; };
+    return () => { clearTimeout(timer); locateTarget.current = null; target.current = null; };
   }, [active, restoration, items]);
 
   const onScrollToIndexFailed = useCallback(({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
@@ -121,9 +130,9 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     // Virtualization can unmount the anchor, briefly shrink the content, and clamp scrollTop.
     // Its replacement host row needs a fresh correction even if the desired offset is identical.
     if (delta && !programmatic && target.current && commandedY.current !== null && measuredNode.current
-      && measuredNode.current !== rows.current.get(target.current.id)) {
+      && measuredNode.current !== rows.current.get(target.current.id) && locateTarget.current) {
       indexSeek.current = 'seeking';
-      correction.current();
+      locateTarget.current();
       return 0;
     }
     if (delta && !programmatic && target.current && (indexSeek.current === 'aligned' || commandedY.current !== null)) {
