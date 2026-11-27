@@ -19,7 +19,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   const scroll = useRef({ y: 0, height: 0, content: 0 });
   const target = useRef<TimelineAnchor | null>(null);
   const commandedY = useRef<number | null>(null);
-  const recovering = useRef(false);
+  const indexSeek = useRef<'seeking' | 'aligned' | null>(null);
   const [footerHeight, setFooterHeight] = useState(0);
   const setRow = useCallback((id: number, node: RowNode | null) => {
     if (node) rows.current.set(id, node);
@@ -50,8 +50,12 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     const row = bounds(rows.current.get(anchor.id));
     if (!row?.height) return false;
     const delta = row.top - viewport.top - anchor.offset;
-    recovering.current = false;
-    if (Math.abs(delta) < 0.5) return true;
+    if (Math.abs(delta) < 0.5) {
+      // An index seek can finish layout before its scroll notification arrives.
+      if (indexSeek.current === 'seeking') indexSeek.current = 'aligned';
+      return true;
+    }
+    indexSeek.current = null;
     const node = listRef.current.getScrollableNode();
     const y = typeof node?.scrollTop === 'number' ? node.scrollTop : scroll.current.y;
     const offset = Math.max(0, y + delta);
@@ -73,7 +77,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   useLayoutEffect(() => {
     target.current = restoration?.anchor ?? null;
     commandedY.current = null;
-    recovering.current = false;
+    indexSeek.current = null;
     if (!target.current) return;
     const index = items.findIndex(movie => movie.id === target.current?.id);
     if (index < 0) return;
@@ -82,7 +86,7 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     function locate() {
       if (!active() || !target.current || correction.current() || attempts >= 6) return;
       ++attempts;
-      recovering.current = true;
+      indexSeek.current = 'seeking';
       listRef.current?.scrollToIndex({ index, animated: false });
       timer = setTimeout(locate, 75);
     }
@@ -91,12 +95,12 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
   }, [active, restoration, items]);
 
   const onScrollToIndexFailed = useCallback(({ index, averageItemLength }: { index: number; averageItemLength: number }) => {
-    if (active() && target.current && recovering.current) {
+    if (active() && target.current && indexSeek.current === 'seeking') {
       listRef.current?.scrollToOffset({ offset: averageItemLength * index, animated: false });
     }
   }, [active]);
   const onUserIntent = useCallback(() => {
-    recovering.current = false;
+    indexSeek.current = null;
     target.current = null;
     commandedY.current = null;
   }, []);
@@ -104,13 +108,17 @@ export function useTimelineViewport(items: readonly MovieSummary[], restoration:
     const before = scroll.current.y;
     const y = Math.max(0, event.contentOffset.y);
     scroll.current = { y, height: event.layoutMeasurement.height, content: event.contentSize.height };
-    const programmatic = recovering.current || (commandedY.current !== null && Math.abs(y - commandedY.current) <= 1);
+    const programmatic = indexSeek.current === 'seeking' || (commandedY.current !== null && Math.abs(y - commandedY.current) <= 1);
     const delta = y - before;
-    if (delta && !programmatic && target.current && commandedY.current !== null) {
+    if (delta && !programmatic && target.current && (indexSeek.current === 'aligned' || commandedY.current !== null)) {
       const row = bounds(rows.current.get(target.current.id));
       const region = bounds(viewportRef.current);
+      if (indexSeek.current === 'aligned') {
+        indexSeek.current = null;
+        if (row && region && Math.abs(row.top - region.top - target.current.offset) < 1) return 0;
+      }
       // FlatList may finish its own initialScrollIndex alignment after our measured correction.
-      if (row && region && Math.abs(row.top - region.top) < 1) {
+      if (commandedY.current !== null && row && region && Math.abs(row.top - region.top) < 1) {
         commandedY.current = null;
         correction.current();
         return 0;

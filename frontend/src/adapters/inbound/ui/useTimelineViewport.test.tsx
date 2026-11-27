@@ -102,3 +102,25 @@ test('a queued index retry cannot scroll after the route or guest lifetime ends'
     expect(scrollToIndex).toHaveBeenCalledTimes(1);
   } finally { jest.useRealTimers(); }
 });
+
+
+test.each([false, true])('zero-offset index alignment before scroll delivery respects explicit user input (%s)', async userMoved => {
+  const items = [movie(3), movie(2)];
+  let restoration: TimelineViewState['restoration'] = null;
+  const hook = await renderHook(() => useTimelineViewport(items, restoration));
+  const viewport = hook.result.current;
+  const scrollToIndex = jest.fn();
+  viewport.listRef.current = { scrollToIndex } as unknown as FlatList<MovieSummary>;
+  viewport.viewportRef.current = box(25, 400);
+  restoration = { revision: 8, anchor: { id: 2, releaseDate: '2022-08-03', offset: 0 } };
+  await hook.rerender(undefined);
+  expect(scrollToIndex).toHaveBeenCalledWith({ index: 1, animated: false });
+  viewport.setRow(2, box(25, 160));
+  await act(() => viewport.onRowLayout());
+  if (userMoved) viewport.onUserIntent();
+  const event = { contentOffset: { y: 800 }, layoutMeasurement: { height: 400 }, contentSize: { height: 1200 } };
+  expect(viewport.updateScroll(event as import('react-native').NativeScrollEvent)).toBe(userMoved ? 800 : 0);
+  // A later unsolicited offset change moves away from the saved row.
+  viewport.setRow(2, box(5, 160));
+  expect(viewport.updateScroll({ ...event, contentOffset: { y: 820 } } as import('react-native').NativeScrollEvent)).toBe(20);
+});

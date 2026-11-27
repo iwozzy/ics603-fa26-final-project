@@ -11,7 +11,7 @@ interface Props {
   ref?: Ref<TimelineListHandle>;
   state: TimelineViewState;
   active(): boolean;
-  onAnchor(anchor: TimelineAnchor, userMoved: boolean): void;
+  onAnchor(anchor: TimelineAnchor | null, userMoved: boolean): void;
   onScrollSettled(): void;
   onLoad(direction: TimelineDirection): void;
 }
@@ -26,12 +26,19 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
   }));
   const intent = useRef<TimelineDirection | null>(null);
   const latched = useRef<Partial<Record<TimelineDirection, string>>>({});
+  const awaitingMeasurement = useRef(false);
   const settle = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const { listRef, viewportRef, scroll, captureAnchor, setRow, onRowLayout } = viewport;
   useImperativeHandle(ref, () => ({ captureAnchor: () => active() ? captureAnchor() : null }), [active, captureAnchor]);
   function remember(userMoved: boolean) {
+    if (!active()) return;
     const anchor = captureAnchor();
-    if (anchor && active()) onAnchor(anchor, userMoved);
+    if (userMoved || anchor) onAnchor(anchor, userMoved);
+    if (userMoved) awaitingMeasurement.current = !anchor;
+    if (anchor && awaitingMeasurement.current) {
+      awaitingMeasurement.current = false;
+      if (settle.current === undefined) onScrollSettled();
+    }
   }
   function nearEdge(direction: TimelineDirection) {
     const { y, height, content } = scroll.current;
@@ -50,16 +57,19 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
   function scheduleSettle() {
     clearTimeout(settle.current);
     settle.current = setTimeout(() => {
+      settle.current = undefined;
       intent.current = null;
-      if (active()) onScrollSettled();
+      if (active() && !awaitingMeasurement.current) onScrollSettled();
     }, 160);
   }
-  function onIntent(direction: TimelineDirection) {
+  function onIntent(direction: TimelineDirection, userMoved = false) {
     if (!active()) return;
     viewport.onUserIntent();
+    if (userMoved) remember(true);
     intent.current = direction;
-    // A short list cannot leave either edge by scrolling. An opposite gesture leaves it explicitly.
-    if (scroll.current.content <= scroll.current.height) {
+    // On a short scroll range every offset is near both edges. Opposite intent leaves the edge.
+    const { content, height } = scroll.current;
+    if (content - height <= height * edgeThreshold) {
       delete latched.current[direction === 'newer' ? 'older' : 'newer'];
     }
     requestEdge(direction);
@@ -80,12 +90,7 @@ export function TimelineList({ ref, state, active, onAnchor, onScrollSettled, on
     const delta = viewport.updateScroll(nativeEvent);
     if (!nearEdge('newer')) delete latched.current.newer;
     if (!nearEdge('older')) delete latched.current.older;
-    if (!delta) return;
-    remember(true);
-    const direction = delta < 0 ? 'newer' : 'older';
-    intent.current = direction;
-    requestEdge(direction);
-    scheduleSettle();
+    if (delta) onIntent(delta < 0 ? 'newer' : 'older', true);
   }
 
   const latestLayout = useRef(() => {});

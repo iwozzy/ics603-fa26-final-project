@@ -1,5 +1,7 @@
 import { act, fireEvent, screen } from '@testing-library/react-native';
-import { FlatList } from 'react-native';
+import type { ComponentRef } from 'react';
+import { FlatList, type View, type NativeScrollEvent, type NativeSyntheticEvent } from 'react-native';
+import * as viewportModule from './useTimelineViewport';
 import { renderTimeline } from '../../../test-utils/renderTimeline';
 import * as listModule from './TimelineList';
 import TimelineScreen from './TimelineScreen';
@@ -97,4 +99,69 @@ test('layout of an accepted short newer page cannot consume another cursor witho
   const list = listRender.mock.contexts.at(-1) as FlatList;
   await act(() => list.props.onStartReached!({ distanceFromStart: 0 }));
   expect(repository.calls).toHaveLength(2);
+});
+
+
+function scrollEvent(y: number, height: number, content: number) {
+  return { nativeEvent: { contentOffset: { y }, layoutMeasurement: { height }, contentSize: { height: content } } } as NativeSyntheticEvent<NativeScrollEvent>;
+}
+
+test.each(['touch', 'scroll'])('opposite %s intent reopens a failed edge when slight overflow cannot leave its threshold', async input => {
+  const listRender = jest.spyOn(FlatList.prototype, 'render');
+  const { repository } = await renderTimeline();
+  await act(() => repository.calls[0].resolve(page));
+  const list = listRender.mock.contexts.at(-1) as FlatList;
+  await act(() => list.props.onScroll!(scrollEvent(0, 800, 850)));
+  const region = screen.getByTestId('timeline-gestures');
+  await fireEvent(region, 'touchStart', { nativeEvent: { pageY: 40 } });
+  await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 80 } });
+  await act(() => repository.calls[1].reject(new Error('offline')));
+  await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 120 } });
+  expect(repository.calls).toHaveLength(2);
+  if (input === 'touch') {
+    await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 60 } });
+    await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 100 } });
+  } else {
+    await act(() => list.props.onScroll!(scrollEvent(50, 800, 850)));
+    await act(() => list.props.onScroll!(scrollEvent(0, 800, 850)));
+  }
+  expect(repository.calls.map(call => call.query)).toEqual([
+    { mode: 'initial' }, { mode: 'page', direction: 'newer', cursor: 'future' }, { mode: 'page', direction: 'newer', cursor: 'future' },
+  ]);
+});
+
+test('real movement into a virtualized gap cancels the old refresh and settles at the later measured movie', async () => {
+  jest.useFakeTimers();
+  try {
+    const viewportRender = jest.spyOn(viewportModule, 'useTimelineViewport');
+    const listRender = jest.spyOn(FlatList.prototype, 'render');
+    const { repository, store, view } = await renderTimeline();
+    const next = { ...movie, id: 12 };
+    await act(() => repository.calls[0].resolve({ ...page, items: [movie, next] }));
+    await act(() => store.rememberAnchor({ id: movie.id, releaseDate: movie.releaseDate, offset: -10 }));
+    mockFocused = false;
+    await view.rerender(<TimelineScreen />);
+    mockFocused = true;
+    await view.rerender(<TimelineScreen />);
+    expect(repository.calls[1].signal.aborted).toBe(false);
+    const list = listRender.mock.contexts.at(-1) as FlatList;
+    const region = screen.getByTestId('timeline-gestures');
+    await fireEvent(region, 'touchStart', { nativeEvent: { pageY: 80 } });
+    await fireEvent(region, 'touchMove', { nativeEvent: { pageY: 40 } });
+    await act(() => list.props.onScroll!(scrollEvent(460, 400, 2000)));
+    expect(repository.calls[1].signal.aborted).toBe(true);
+    expect(store.getSnapshot().anchor).toBeNull();
+    await act(() => jest.advanceTimersByTime(250));
+    expect(repository.calls).toHaveLength(2);
+    const viewport = viewportRender.mock.results.at(-1)!.value;
+    const box = (top: number, height: number) => ({ getBoundingClientRect: () => ({ top, height }) }) as unknown as ComponentRef<typeof View>;
+    viewport.viewportRef.current = box(20, 400);
+    viewport.setRow(next.id, box(-8, 160));
+    await act(() => list.props.onContentSizeChange!(600, 2000));
+    await act(() => jest.advanceTimersByTime(250));
+    expect(repository.calls.map(call => call.query)).toEqual([
+      { mode: 'initial' }, { mode: 'anchor', anchor: { id: movie.id, releaseDate: movie.releaseDate } },
+      { mode: 'anchor', anchor: { id: next.id, releaseDate: next.releaseDate } },
+    ]);
+  } finally { jest.useRealTimers(); }
 });
