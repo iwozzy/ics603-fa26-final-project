@@ -8,11 +8,17 @@ from alembic.config import Config
 from sqlalchemy import Connection
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
+from lumiere.adapters.outbound.persistence.filmography_unit_of_work import (
+    PostgresFilmographyUnitOfWork,
+)
 from lumiere.adapters.outbound.persistence.following_unit_of_work import (
     PostgresFollowingUnitOfWork,
 )
 from lumiere.adapters.outbound.persistence.people_unit_of_work import (
     PostgresPeopleUnitOfWork,
+)
+from lumiere.adapters.outbound.persistence.timeline_unit_of_work import (
+    PostgresTimelineUnitOfWork,
 )
 from lumiere.adapters.outbound.persistence.unit_of_work import PostgresAccessUnitOfWork
 
@@ -52,3 +58,13 @@ def people_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], Po
 @pytest.fixture
 def following_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresFollowingUnitOfWork]:
     return lambda: PostgresFollowingUnitOfWork(uows().factory)
+
+
+@pytest.fixture
+def filmography_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresFilmographyUnitOfWork]:
+    return lambda: PostgresFilmographyUnitOfWork(uows().factory)
+
+
+@pytest.fixture
+def timeline_uows(uows: Callable[[], PostgresAccessUnitOfWork]) -> Callable[[], PostgresTimelineUnitOfWork]:
+    return lambda: PostgresTimelineUnitOfWork(uows().factory)

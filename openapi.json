@@ -64,6 +64,56 @@
         "title": "HTTPValidationError",
         "type": "object"
       },
+      "MovieSummaryResponse": {
+        "properties": {
+          "id": {
+            "maximum": 9007199254740991.0,
+            "minimum": 1.0,
+            "title": "Id",
+            "type": "integer"
+          },
+          "overview": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Overview"
+          },
+          "poster_image_url": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Poster Image Url"
+          },
+          "release_date": {
+            "format": "date",
+            "title": "Release Date",
+            "type": "string"
+          },
+          "title": {
+            "title": "Title",
+            "type": "string"
+          }
+        },
+        "required": [
+          "id",
+          "title",
+          "overview",
+          "poster_image_url",
+          "release_date"
+        ],
+        "title": "MovieSummaryResponse",
+        "type": "object"
+      },
       "PersonResponse": {
         "properties": {
           "known_for": {
@@ -147,6 +197,78 @@
           "people"
         ],
         "title": "SearchPeopleResponse",
+        "type": "object"
+      },
+      "TimelineDirection": {
+        "enum": [
+          "older",
+          "newer"
+        ],
+        "type": "string"
+      },
+      "TimelineResponse": {
+        "properties": {
+          "anchor_index": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Anchor Index"
+          },
+          "as_of": {
+            "anyOf": [
+              {
+                "format": "date",
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "As Of"
+          },
+          "items": {
+            "items": {
+              "$ref": "#/components/schemas/MovieSummaryResponse"
+            },
+            "title": "Items",
+            "type": "array"
+          },
+          "newer_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Newer Cursor"
+          },
+          "older_cursor": {
+            "anyOf": [
+              {
+                "type": "string"
+              },
+              {
+                "type": "null"
+              }
+            ],
+            "title": "Older Cursor"
+          }
+        },
+        "required": [
+          "items",
+          "older_cursor",
+          "newer_cursor",
+          "as_of",
+          "anchor_index"
+        ],
+        "title": "TimelineResponse",
         "type": "object"
       },
       "ValidationError": {
@@ -325,6 +447,108 @@
           }
         },
         "summary": "Search"
+      }
+    },
+    "/api/v1/timeline": {
+      "get": {
+        "operationId": "listTimeline",
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "required": false,
+            "schema": {
+              "default": 20,
+              "maximum": 100,
+              "minimum": 1,
+              "title": "Limit",
+              "type": "integer"
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Cursor"
+            }
+          },
+          {
+            "in": "query",
+            "name": "direction",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "$ref": "#/components/schemas/TimelineDirection"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Direction"
+            }
+          },
+          {
+            "in": "query",
+            "name": "anchor_date",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "format": "date",
+                  "type": "string"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Anchor Date"
+            }
+          },
+          {
+            "in": "query",
+            "name": "anchor_id",
+            "required": false,
+            "schema": {
+              "anyOf": [
+                {
+                  "maximum": 9007199254740991,
+                  "minimum": 1,
+                  "type": "integer"
+                },
+                {
+                  "type": "null"
+                }
+              ],
+              "title": "Anchor Id"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/TimelineResponse"
+                }
+              }
+            },
+            "description": "Successful Response"
+          },
+          "500": {
+            "description": "Timeline failed"
+          }
+        },
+        "summary": "List Timeline"
       }
     }
   }

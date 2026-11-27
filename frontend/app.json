@@ -4,6 +4,7 @@
     "slug": "lumiere",
     "version": "1.0.0",
     "scheme": "lumiere",
+    "userInterfaceStyle": "automatic",
     "web": {
       "output": "single",
       "name": "Lumiere"

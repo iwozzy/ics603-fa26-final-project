@@ -26,6 +26,7 @@ from lumiere.domain.access import GuestContext
 from lumiere.domain.errors import FollowingFailed
 from lumiere.domain.following import FollowingSnapshot, PersonIdentity
 from lumiere.domain.people import CatalogProvider
+from tests.fakes.hydration import RecordingFilmographyQueue
 from tests.fakes.search import sample_person
 
 Factory = Callable[[], PostgresFollowingUnitOfWork]
@@ -54,7 +55,7 @@ async def test_follow_uses_three_statements(
     failure: str | None, expected: list[int],
 ) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     for i in existing:
         await follow.execute(identity(i), context)
     statements: list[str] = []
@@ -84,7 +85,7 @@ async def test_follow_uses_three_statements(
 @pytest.mark.parametrize('existing', [(), (1, 2, 3)])
 async def test_missing_person_fails_even_at_cap(following_uows: Factory, existing: tuple[int, ...]) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     for i in existing:
         await follow.execute(identity(i), context)
     before = await ListFollowing(following_uows).execute(context)
@@ -95,7 +96,7 @@ async def test_missing_person_fails_even_at_cap(following_uows: Factory, existin
 
 async def test_following_newest_first_and_repeat_preserves_timestamp(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     for i in (1, 2, 3):
         await follow.execute(identity(i), context)
     async with following_uows() as uow:
@@ -114,7 +115,7 @@ async def test_following_newest_first_and_repeat_preserves_timestamp(following_u
 
 async def test_two_concurrent_distinct_follows_from_two_allow_exactly_one(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     for i in (1, 2):
         await follow.execute(identity(i), context)
     results = await asyncio.wait_for(asyncio.gather(*(follow.execute(identity(i), context) for i in (3, 4)), return_exceptions=True), 3)
@@ -127,7 +128,7 @@ async def test_two_concurrent_distinct_follows_from_two_allow_exactly_one(follow
 
 async def test_concurrent_repeat_creates_one_row(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     results = await asyncio.wait_for(asyncio.gather(*(follow.execute(identity(1), context) for _ in range(2))), 3)
     assert all(len(r.people) == 1 for r in results)
     async with following_uows() as uow:
@@ -136,7 +137,7 @@ async def test_concurrent_repeat_creates_one_row(following_uows: Factory) -> Non
 
 async def test_following_uses_current_summary_and_profile_ownership(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     async with following_uows() as uow:
         await PostgresPeopleRepository(uow.session).upsert_batch((sample_person(1, name='Updated', known_for=('Alien',), provider_profile_path='/a.jpg'),))
         await uow.commit()
@@ -158,7 +159,7 @@ async def test_waiting_profile_lock_yields_to_other_requests(following_uows: Fac
                 await bounded.session.execute(text("SET LOCAL lock_timeout = '2s'"))
                 started.set()
                 assert await bounded.follows.lock_profile(context.profile_id)
-            return await FollowPerson(following_uows).execute(identity(1), context)
+            return await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
         waiting = asyncio.create_task(work())
         try:
             await asyncio.wait_for(started.wait(), 1)
@@ -172,7 +173,7 @@ async def test_waiting_profile_lock_yields_to_other_requests(following_uows: Fac
             with pytest.raises(asyncio.CancelledError):
                 await asyncio.wait_for(waiting, .5)
     assert (await ListFollowing(following_uows).execute(context)).people == ()
-    assert len((await FollowPerson(following_uows).execute(identity(1), context)).people) == 1
+    assert len((await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)).people) == 1
 
 
 async def test_rollback_and_cancel_leave_no_membership(following_uows: Factory) -> None:
@@ -195,7 +196,7 @@ async def test_rollback_and_cancel_leave_no_membership(following_uows: Factory) 
     with pytest.raises(asyncio.CancelledError):
         await asyncio.wait_for(task, .5)
     assert (await ListFollowing(following_uows).execute(context)).people == ()
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     # A fresh engine/connection proves durability independently of the original pool.
     from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 
@@ -215,7 +216,7 @@ async def test_unfollow_survives_fresh_engine(following_uows: Factory) -> None:
     context = await seed(following_uows)
     other = await seed(following_uows)
     for owner, i in ((context, 1), (context, 2), (other, 1)):
-        await FollowPerson(following_uows).execute(identity(i), owner)
+        await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(i), owner)
     async with following_uows() as uow:
         before = {(r.profile_id, r.person_id): r.followed_at for r in await uow.session.scalars(select(FollowRow))}
         removed = await uow.session.scalar(select(PersonRow.id).where(PersonRow.tmdb_id == 1))
@@ -234,7 +235,7 @@ async def test_unfollow_survives_fresh_engine(following_uows: Factory) -> None:
 
 async def test_unfollow_rollback_and_cancel_restore_relationship(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     ready = asyncio.Event()
     async def interrupted(cancel: bool) -> None:
         async with following_uows() as uow:
@@ -260,7 +261,7 @@ async def test_unfollow_rollback_and_cancel_restore_relationship(following_uows:
 @pytest.mark.parametrize('missing_profile', [False, True])
 async def test_unfollow_uses_one_joined_delete(following_uows: Factory, provider_id: int, missing_profile: bool) -> None:
     context = await seed(following_uows)
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     owner = GuestContext(uuid4(), 'absent') if missing_profile else context
     statements: list[str] = []
     def capture(*args: object) -> None:
@@ -285,7 +286,7 @@ async def test_unfollow_uses_one_joined_delete(following_uows: Factory, provider
 @pytest.mark.parametrize('same_person', [True, False])
 async def test_sequential_follow_and_unfollow_preserve_action_order(following_uows: Factory, delete_first: bool, same_person: bool) -> None:
     context = await seed(following_uows)
-    follow = FollowPerson(following_uows)
+    follow = FollowPerson(following_uows, RecordingFilmographyQueue())
     for i in (1, 2, 3):
         await follow.execute(identity(i), context)
     target = identity(1 if same_person else 4)
@@ -305,7 +306,7 @@ async def test_sequential_follow_and_unfollow_preserve_action_order(following_uo
 
 async def test_unfollow_does_not_wait_for_profile_lock(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     async with following_uows() as blocker:
         assert await blocker.follows.lock_profile(context.profile_id)
         await asyncio.wait_for(UnfollowPerson(following_uows).execute(identity(1), context), 1)
@@ -321,7 +322,7 @@ async def test_unfollow_cannot_remove_an_uncommitted_follow(following_uows: Fact
             entered.set()
             await release.wait()
             await super().commit()
-    pending = asyncio.create_task(FollowPerson(lambda: PendingFollow(following_uows().factory)).execute(identity(1), context))
+    pending = asyncio.create_task(FollowPerson(lambda: PendingFollow(following_uows().factory), RecordingFilmographyQueue()).execute(identity(1), context))
     try:
         await asyncio.wait_for(entered.wait(), 1)
         await asyncio.wait_for(UnfollowPerson(following_uows).execute(identity(1), context), 1)
@@ -334,7 +335,7 @@ async def test_unfollow_cannot_remove_an_uncommitted_follow(following_uows: Fact
 
 async def test_waiting_unfollow_cancel_releases_resources(following_uows: Factory) -> None:
     context = await seed(following_uows)
-    await FollowPerson(following_uows).execute(identity(1), context)
+    await FollowPerson(following_uows, RecordingFilmographyQueue()).execute(identity(1), context)
     started = asyncio.Event()
     class WaitingUnitOfWork(PostgresFollowingUnitOfWork):
         @override

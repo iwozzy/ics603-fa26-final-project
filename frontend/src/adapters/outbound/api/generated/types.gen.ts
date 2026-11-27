@@ -45,6 +45,32 @@ export type HttpValidationError = {
 };
 
 /**
+ * MovieSummaryResponse
+ */
+export type MovieSummaryResponse = {
+    /**
+     * Id
+     */
+    id: number;
+    /**
+     * Overview
+     */
+    overview: string | null;
+    /**
+     * Poster Image Url
+     */
+    poster_image_url: string | null;
+    /**
+     * Release Date
+     */
+    release_date: string;
+    /**
+     * Title
+     */
+    title: string;
+};
+
+/**
  * PersonResponse
  */
 export type PersonResponse = {
@@ -83,6 +109,34 @@ export type SearchPeopleResponse = {
      * Query
      */
     query: string;
+};
+
+export type TimelineDirection = 'older' | 'newer';
+
+/**
+ * TimelineResponse
+ */
+export type TimelineResponse = {
+    /**
+     * Anchor Index
+     */
+    anchor_index: number | null;
+    /**
+     * As Of
+     */
+    as_of: string | null;
+    /**
+     * Items
+     */
+    items: Array<MovieSummaryResponse>;
+    /**
+     * Newer Cursor
+     */
+    newer_cursor: string | null;
+    /**
+     * Older Cursor
+     */
+    older_cursor: string | null;
 };
 
 /**
@@ -230,3 +284,47 @@ export type SearchPeopleResponses = {
 };
 
 export type SearchPeopleResponse2 = SearchPeopleResponses[keyof SearchPeopleResponses];
+
+export type ListTimelineData = {
+    body?: never;
+    path?: never;
+    query?: {
+        /**
+         * Limit
+         */
+        limit?: number;
+        /**
+         * Cursor
+         */
+        cursor?: string | null;
+        /**
+         * Direction
+         */
+        direction?: TimelineDirection | null;
+        /**
+         * Anchor Date
+         */
+        anchor_date?: string | null;
+        /**
+         * Anchor Id
+         */
+        anchor_id?: number | null;
+    };
+    url: '/api/v1/timeline';
+};
+
+export type ListTimelineErrors = {
+    /**
+     * Timeline failed
+     */
+    500: unknown;
+};
+
+export type ListTimelineResponses = {
+    /**
+     * Successful Response
+     */
+    200: TimelineResponse;
+};
+
+export type ListTimelineResponse = ListTimelineResponses[keyof ListTimelineResponses];

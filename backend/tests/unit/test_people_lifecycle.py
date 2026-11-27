@@ -21,8 +21,10 @@ from lumiere.domain.access import GuestContext, UsagePolicy
 from lumiere.domain.errors import SearchFailed
 from tests.fakes.accounting import ControlledAccess
 from tests.fakes.following import MemoryFollowing
+from tests.fakes.hydration import controlled_hydrator
 from tests.fakes.people import ControlledPeoplePersistence
 from tests.fakes.search import FakeCatalog, FakeClock, sample_person
+from tests.fakes.timeline import UnexpectedTimeline
 
 POLICY = UsagePolicy(*(100 for _ in range(10)))
 
@@ -43,8 +45,17 @@ def container_for(access: ControlledAccess, people: ControlledPeoplePersistence)
     admission = UsageAdmissionService(access, POLICY, shutdown_timeout=.03)
     writer = PeopleWriter(people, shutdown_timeout=.03)
     pools = PoolsProbe(access, people)
-    services = HttpServices(SearchPeople(FakeCatalog(), admission, FakeClock(), writer), GuestIdentityService(access, POLICY), b'synthetic-test-key', list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()), unfollow_person=UnfollowPerson(MemoryFollowing()))
-    return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, pools), admission, writer), pools
+    hydration = controlled_hydrator(admission)
+    services = HttpServices(
+        SearchPeople(FakeCatalog(), admission, FakeClock(), writer),
+        GuestIdentityService(access, POLICY),
+        b'synthetic-test-key',
+        list_following=ListFollowing(MemoryFollowing()),
+        follow_person=FollowPerson(MemoryFollowing(), hydration),
+        unfollow_person=UnfollowPerson(MemoryFollowing()),
+        list_timeline=UnexpectedTimeline(),
+    )
+    return AppContainer(services, httpx.AsyncClient(), cast(PoolRegistry, pools), admission, writer, hydration), pools
 
 
 async def test_both_writers_finish_before_pool_disposal_and_close_is_repeatable() -> None:
@@ -123,7 +134,7 @@ async def test_cancelling_container_close_waits_for_writers_before_disposal() ->
     assert not people.active_session_tokens
 
 
-async def test_runtime_assigns_distinct_named_factories_and_instruments_both(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_runtime_assigns_distinct_named_factories_and_instruments_all(monkeypatch: pytest.MonkeyPatch) -> None:
     from pydantic import SecretStr
     from sqlalchemy import Engine
 
@@ -136,15 +147,24 @@ async def test_runtime_assigns_distinct_named_factories_and_instruments_both(mon
     container = bootstrap.build_container(settings)
     application = container.pools.get('application')
     people = container.pools.get('people_writer')
+    hydration = container.pools.get('movie_hydration')
     try:
-        assert application.engine is not people.engine
-        assert engines == [application.engine.sync_engine, people.engine.sync_engine]
+        assert len({application.engine, people.engine, hydration.engine}) == 3
+        assert engines == [application.engine.sync_engine, people.engine.sync_engine, hydration.engine.sync_engine]
         assert container.services.follow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.services.list_following.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.services.unfollow_person.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
+        assert container.services.list_timeline.inner.factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.admission.uow_factory().factory is application.sessions  # type: ignore[attr-defined]
         assert container.people_writer.uow_factory().factory is people.sessions  # type: ignore[attr-defined]
-        for pool in (application, people):
+        assert container.filmography_hydrator.hydrate.factory().factory is hydration.sessions  # type: ignore[attr-defined]
+        assert container.services.follow_person.inner.hydration is container.filmography_hydrator  # type: ignore[attr-defined]
+        hydrate = container.filmography_hydrator.hydrate
+        catalog = hydrate.catalog.inner  # type: ignore[attr-defined]
+        assert catalog.client is container.client
+        assert catalog.on_throttle == hydrate.dispatch.observe_throttle
+        assert hydrate.dispatch._admission is container.admission
+        for pool in (application, people, hydration):
             assert pool.engine.pool.size() == 5  # type: ignore[attr-defined]
             assert pool.engine.pool._max_overflow == 5  # type: ignore[attr-defined]
             assert pool.engine.pool.checkedout() == 0  # type: ignore[attr-defined]

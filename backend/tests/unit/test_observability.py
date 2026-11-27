@@ -15,12 +15,21 @@ from lumiere.application.use_cases.following import (
 )
 from lumiere.application.use_cases.guest_identity import GuestIdentityService
 from lumiere.application.use_cases.search_people import SearchPeople
-from lumiere.domain.access import UsagePolicy
-from lumiere.domain.errors import SearchFailed
+from lumiere.domain.access import GuestContext, UsagePolicy
+from lumiere.domain.errors import SearchFailed, TimelineFailed
+from lumiere.domain.timeline import TimelinePage, TimelineRequest
 from lumiere.main import create_app
 from tests.fakes.access import MemoryAccess
 from tests.fakes.following import MemoryFollowing
+from tests.fakes.hydration import RecordingFilmographyQueue
 from tests.fakes.search import FakeAdmission, FakeClock, FakePeopleQueue
+
+
+class RejectedTimeline:
+    async def execute(self, request: TimelineRequest, context: GuestContext) -> TimelinePage:
+        if request.cursor == 'SENTINEL_CURSOR':
+            raise TimelineFailed('invalid_cursor')
+        raise TimelineFailed('SENTINEL_EXCEPTION')
 
 
 async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -34,7 +43,7 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     async with httpx.AsyncClient(base_url="https://provider.test", transport=httpx.MockTransport(lambda _: httpx.Response(200, json={"results": [{"id": 1, "name": "SENTINEL_PAYLOAD"}, {"id": False, "name": "invalid"}]}))) as provider:
         catalog = TMDBPeopleCatalog(provider, report=telemetry.record_catalog_counts)
         policy = UsagePolicy(100,100,100,100,100,100,100,100,100,100)
-        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing()), unfollow_person=UnfollowPerson(MemoryFollowing()))
+        services = HttpServices(SearchPeople(catalog, admission, FakeClock(), FakePeopleQueue()), GuestIdentityService(MemoryAccess(), policy), b"synthetic-key", list_following=ListFollowing(MemoryFollowing()), follow_person=FollowPerson(MemoryFollowing(), RecordingFilmographyQueue()), unfollow_person=UnfollowPerson(MemoryFollowing()), list_timeline=RejectedTimeline())
         app = create_app(telemetry.observe_services(services))
         telemetry.instrument_http(app)
         async with httpx.AsyncClient(base_url="https://app.test", transport=httpx.ASGITransport(app=app)) as client:
@@ -43,9 +52,11 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
             assert response.status_code == 200
             admission.error = SearchFailed("quota")
             assert (await client.get("/api/v1/people/search?query=SENTINEL_QUERY")).status_code == 500
+            for query in ('?cursor=SENTINEL_CURSOR&direction=older', '', '?SENTINEL_QUERY=1'):
+                assert (await client.get(f'/api/v1/timeline{query}')).status_code == 500
     spans = exporter.get_finished_spans()
     serialized = json.dumps([dict(span.attributes or {}) for span in spans])
-    for sentinel in ("SENTINEL_QUERY", "SENTINEL_PAYLOAD", "SENTINEL_AUTH", "SENTINEL_CORRELATION"):
+    for sentinel in ("SENTINEL_QUERY", "SENTINEL_PAYLOAD", "SENTINEL_AUTH", "SENTINEL_CORRELATION", "SENTINEL_CURSOR", "SENTINEL_EXCEPTION"):
         assert sentinel not in serialized
     attributes = [dict(span.attributes or {}) for span in spans]
     assert any(item.get("selected_count") == 1 for item in attributes)
@@ -55,6 +66,11 @@ async def test_sanitized_correlated_boundary_spans(monkeypatch: pytest.MonkeyPat
     assert all(span.end_time is not None and span.start_time is not None and span.end_time >= span.start_time for span in spans)
     trace_ids = [span.context.trace_id for span in spans if span.context is not None and span.name in ("http.search", "people.search")]
     assert len(trace_ids) >= 4 and len(set(trace_ids)) < len(trace_ids)
+    for name, expected in (
+        ('http.timeline.list', ['invalid_cursor', 'internal', 'invalid_request']),
+        ('timeline.list', ['invalid_cursor', 'internal']),
+    ):
+        assert [(span.attributes or {}).get('failure_category') for span in spans if span.name == name] == expected
     telemetry.configure_observability(False)
 
 
@@ -154,6 +170,60 @@ async def test_follow_spans_sanitize_identity_and_errors(monkeypatch: pytest.Mon
         assert {s.name for s in spans} >= {'following.list', 'following.follow', 'following.unfollow'}
         attributes = [dict(s.attributes or {}) for s in spans]
         assert any(a.get('failure_category') == category for a in attributes)
+        encoded = json.dumps(attributes)
+        assert 'SENTINEL' not in encoded and '4139' not in encoded and str(context.profile_id) not in encoded
+    finally:
+        telemetry.configure_observability(False)
+
+
+@pytest.mark.parametrize('category', [
+    'provider_throttled', 'provider_status', 'provider_transport', 'provider_response',
+    'provider_oversize', 'provider_identity_mismatch', 'provider_credit_conflict', 'SENTINEL_EXCEPTION',
+])
+async def test_hydration_telemetry_sanitizes_events_and_fetch_failures(
+    monkeypatch: pytest.MonkeyPatch, category: str,
+) -> None:
+    from uuid import uuid4
+
+    import lumiere.observability as telemetry
+    from lumiere.application.ports.filmography import HydrationEvent
+    from lumiere.application.provider_dispatch import ProviderDispatch
+    from lumiere.domain.access import GuestContext
+    from lumiere.domain.errors import HydrationFailed, HydrationThrottled
+    from lumiere.domain.following import PersonIdentity
+    from lumiere.domain.people import CatalogProvider
+    from tests.fakes.hydration import (
+        ControlledFilmography,
+        ControlledFilmographyCatalog,
+        ControlledHydrationClock,
+        RecordingAdmission,
+    )
+
+    exporter = InMemorySpanExporter()
+    logfire.configure(send_to_logfire=False, console=False, inspect_arguments=False, additional_span_processors=[SimpleSpanProcessor(exporter)])
+    monkeypatch.setattr(telemetry, '_configure_export', lambda: True)
+    telemetry.configure_observability(True)
+    clock = ControlledHydrationClock()
+    catalog = ControlledFilmographyCatalog()
+    catalog.errors.append(HydrationThrottled(120) if category == 'provider_throttled' else HydrationFailed(category))
+    observed_catalog = telemetry.ObservedFilmographyCatalog(catalog)
+    admission = RecordingAdmission()
+    admission.reject = True
+    hydrate = telemetry.ObservedHydrateFilmography(ControlledFilmography(clock), observed_catalog, ProviderDispatch(admission, clock), clock)
+    identity = PersonIdentity(CatalogProvider.TMDB, 4139)
+    context = GuestContext(uuid4(), 'SENTINEL_IP')
+    try:
+        telemetry.record_hydration(HydrationEvent('accepted', 4, 2, 0, 17))
+        with pytest.raises(HydrationFailed):
+            await observed_catalog.fetch(identity)
+        with pytest.raises(SearchFailed, match='quota'):
+            await hydrate.execute(identity, context)
+        attributes = {s.name: dict(s.attributes or {}) for s in exporter.get_finished_spans()}
+        expected_queue = {'event_kind': 'accepted', 'outstanding': 4, 'in_flight': 2, 'attempt': 0, 'duration_ms': 17}
+        assert expected_queue.items() <= attributes['filmography.queue'].items()
+        assert attributes['filmography.provider']['failure_category'] == ('internal' if category.startswith('SENTINEL') else category)
+        assert attributes['filmography.hydrate']['quota_outcome'] == 'rejected'
+        assert attributes['filmography.hydrate']['failure_category'] == 'quota'
         encoded = json.dumps(attributes)
         assert 'SENTINEL' not in encoded and '4139' not in encoded and str(context.profile_id) not in encoded
     finally:
