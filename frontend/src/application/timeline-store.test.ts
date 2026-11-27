@@ -93,6 +93,21 @@ test('test_return_uses_one_anchor_request_not_all_cached_pages', async () => {
   expect(refreshedRestoration.anchor).toEqual({ ...saved, releaseDate: '2022-08-04' });
 });
 
+test('departure_without_a_fresh_measurement_restores_the_last_saved_anchor', async () => {
+  const { store, repository } = await ready();
+  store.rememberAnchor(saved);
+  store.leave(null);
+
+  const returning = store.enter();
+  expect(repository.calls[1].query).toEqual({ mode: 'anchor', anchor: { releaseDate: '2022-08-03', id: 123 } });
+  expect(store.getSnapshot()).toMatchObject({
+    items: [savedMovie, olderMovie], anchor: saved, restoration: { anchor: saved },
+  });
+  repository.calls[1].resolve(page([savedMovie], { asOf: '2026-11-27', anchorIndex: 0 }));
+  await returning;
+  expect(store.getSnapshot()).toMatchObject({ items: [savedMovie], restoration: { anchor: saved } });
+});
+
 test('empty_past_can_page_into_the_future_using_its_newer_cursor', async () => {
   const { store, repository } = await ready(page([], { asOf: '2026-11-26', newerCursor: 'future' }));
   await store.load('older');

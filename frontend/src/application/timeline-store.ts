@@ -94,7 +94,7 @@ export class TimelineStore {
   stop(): void {
     this.unsubscribeIdentity?.();
     this.unsubscribeIdentity = undefined;
-    this.leave(this.state.anchor);
+    this.leave(null);
   }
 
   async enter(): Promise<void> {
@@ -106,13 +106,14 @@ export class TimelineStore {
     await this.refresh(anchor, anchor ? this.nextRestoration(anchor) : null);
   }
 
-  leave(anchor: TimelineAnchor | null): void {
+  leave(measurement: TimelineAnchor | null): void {
     if (!this.visible) return;
     this.visible = false;
     this.scrollReplacement = 'none';
     this.cancelReads();
+    const measuredAnchor = measurement && locateAnchor(this.state.items, measurement);
     this.publish({
-      anchor: anchor && (locateAnchor(this.state.items, anchor) ?? this.state.anchor),
+      anchor: measuredAnchor ?? this.state.anchor,
       phase: this.pages.length ? 'ready' : 'idle',
       fetchingOlder: false,
       fetchingNewer: false,
